@@ -1,0 +1,464 @@
+[
+  {
+    "id": "idle",
+    "name": "Quiet company",
+    "group": "Conversation",
+    "description": "Here with you, breathing and blinking.",
+    "duration": 12,
+    "suite": 1
+  },
+  {
+    "id": "greeting",
+    "name": "Hello",
+    "group": "Conversation",
+    "description": "A wave to say hi.",
+    "duration": 12,
+    "suite": 2
+  },
+  {
+    "id": "listening",
+    "name": "Listening",
+    "group": "Conversation",
+    "description": "Leans in while you talk.",
+    "duration": 12,
+    "suite": 3
+  },
+  {
+    "id": "understood",
+    "name": "Understood",
+    "group": "Conversation",
+    "description": "Got it.",
+    "duration": 12
+  },
+  {
+    "id": "thinking",
+    "name": "Thinking",
+    "group": "Conversation",
+    "description": "Paw to cheek while working it out.",
+    "duration": 12,
+    "suite": 4
+  },
+  {
+    "id": "remembering",
+    "name": "Remembering",
+    "group": "Conversation",
+    "description": "Keeping that close.",
+    "duration": 12
+  },
+  {
+    "id": "recalling",
+    "name": "Recalling",
+    "group": "Conversation",
+    "description": "That reminds me…",
+    "duration": 12
+  },
+  {
+    "id": "speaking",
+    "name": "Speaking",
+    "group": "Conversation",
+    "description": "Talks with small gestures.",
+    "duration": 12,
+    "suite": 5
+  },
+  {
+    "id": "asking",
+    "name": "Needs you",
+    "group": "Conversation",
+    "description": "What do you think?",
+    "duration": 12
+  },
+  {
+    "id": "corrected",
+    "name": "Taking a correction",
+    "group": "Conversation",
+    "description": "Let me revisit that.",
+    "duration": 12
+  },
+  {
+    "id": "writing",
+    "name": "Writing",
+    "group": "Work",
+    "description": "Pencil on a still page.",
+    "duration": 10.4,
+    "suite": 6
+  },
+  {
+    "id": "reading",
+    "name": "Reading",
+    "group": "Work",
+    "description": "Turns the pages of a book.",
+    "duration": 8.4,
+    "suite": 7
+  },
+  {
+    "id": "outlining",
+    "name": "Outlining",
+    "group": "Writing",
+    "description": "Finding the order of the argument.",
+    "duration": 10.4
+  },
+  {
+    "id": "idea",
+    "name": "An idea",
+    "group": "Writing",
+    "description": "Something clicked.",
+    "duration": 12
+  },
+  {
+    "id": "revising",
+    "name": "Revising",
+    "group": "Writing",
+    "description": "Read it. Rethink it. Rewrite it.",
+    "duration": 10.4
+  },
+  {
+    "id": "sources",
+    "name": "Checking sources",
+    "group": "Writing",
+    "description": "Comparing the claim with its source.",
+    "duration": 12
+  },
+  {
+    "id": "comparing",
+    "name": "Comparing drafts",
+    "group": "Writing",
+    "description": "Looking at both possibilities.",
+    "duration": 12
+  },
+  {
+    "id": "handoff",
+    "name": "Draft handoff",
+    "group": "Writing",
+    "description": "Ready for your eyes.",
+    "duration": 12
+  },
+  {
+    "id": "beat",
+    "name": "Beat nod",
+    "group": "Music",
+    "description": "A small nod on every beat.",
+    "duration": 12
+  },
+  {
+    "id": "sway",
+    "name": "Gentle sway",
+    "group": "Music",
+    "description": "Following the musical phrase.",
+    "duration": 12
+  },
+  {
+    "id": "groove",
+    "name": "Music",
+    "group": "Life",
+    "description": "Headphones on, bouncing to the beat.",
+    "duration": 12,
+    "suite": 11
+  },
+  {
+    "id": "dance",
+    "name": "Full dance",
+    "group": "Music",
+    "description": "Room for a bigger move.",
+    "duration": 12
+  },
+  {
+    "id": "breakdown",
+    "name": "Musical break",
+    "group": "Music",
+    "description": "Softening, then finding the rhythm again.",
+    "duration": 12
+  },
+  {
+    "id": "track",
+    "name": "Track transition",
+    "group": "Music",
+    "description": "Settling into the next song.",
+    "duration": 12
+  },
+  {
+    "id": "music-pause",
+    "name": "Music paused",
+    "group": "Music",
+    "description": "A graceful landing.",
+    "duration": 12
+  },
+  {
+    "id": "volume",
+    "name": "Volume response",
+    "group": "Music",
+    "description": "A small turn, then back to the rhythm.",
+    "duration": 12
+  },
+  {
+    "id": "research",
+    "name": "Researching",
+    "group": "Work",
+    "description": "Finding the pieces worth keeping.",
+    "duration": 12
+  },
+  {
+    "id": "calculating",
+    "name": "Calculating",
+    "group": "Work",
+    "description": "Working it through, then checking.",
+    "duration": 12
+  },
+  {
+    "id": "coding",
+    "name": "Coding",
+    "group": "Work",
+    "description": "Types at the little computer.",
+    "duration": 12,
+    "suite": 9
+  },
+  {
+    "id": "organizing",
+    "name": "Organizing",
+    "group": "Work",
+    "description": "Everything in its place.",
+    "duration": 12
+  },
+  {
+    "id": "standup",
+    "name": "Preparing standup",
+    "group": "Work",
+    "description": "Yesterday, today, and what needs attention.",
+    "duration": 10.4
+  },
+  {
+    "id": "reviewing",
+    "name": "Reviewing",
+    "group": "Work",
+    "description": "One detail deserves another look.",
+    "duration": 12
+  },
+  {
+    "id": "executing",
+    "name": "Working on it",
+    "group": "Work",
+    "description": "Following through on the task.",
+    "duration": 12
+  },
+  {
+    "id": "done",
+    "name": "Celebrating",
+    "group": "Life",
+    "description": "A hop and a burst of confetti.",
+    "duration": 12,
+    "suite": 13
+  },
+  {
+    "id": "focus",
+    "name": "Focus",
+    "group": "Work",
+    "description": "Holds the timer and settles in.",
+    "duration": 12,
+    "suite": 10
+  },
+  {
+    "id": "interrupted",
+    "name": "Interrupted",
+    "group": "Everyday",
+    "description": "Turning back toward you.",
+    "duration": 12
+  },
+  {
+    "id": "waiting",
+    "name": "Waiting",
+    "group": "Everyday",
+    "description": "Patiently holding the place.",
+    "duration": 12
+  },
+  {
+    "id": "problem",
+    "name": "A small problem",
+    "group": "Everyday",
+    "description": "Something needs attention.",
+    "duration": 12
+  },
+  {
+    "id": "resting",
+    "name": "Sleeping",
+    "group": "Life",
+    "description": "Eyes closed, drifting off.",
+    "duration": 12,
+    "suite": 14
+  },
+  {
+    "id": "waking",
+    "name": "Waking up",
+    "group": "Everyday",
+    "description": "A stretch and a fresh start.",
+    "duration": 12
+  },
+  {
+    "id": "journaling",
+    "name": "Journaling",
+    "group": "Writing",
+    "description": "A little note, written thoughtfully.",
+    "duration": 10.4
+  },
+  {
+    "id": "sketching",
+    "name": "Doodling",
+    "group": "Writing",
+    "description": "Drawing a tiny heart.",
+    "duration": 10.4
+  },
+  {
+    "id": "proofreading",
+    "name": "Proofreading",
+    "group": "Writing",
+    "description": "A careful read, then a small correction.",
+    "duration": 10.4
+  },
+  {
+    "id": "debugging",
+    "name": "Debugging",
+    "group": "Coding",
+    "description": "Stops at a breakpoint, studies the line, then fixes it.",
+    "duration": 12
+  },
+  {
+    "id": "testing",
+    "name": "Running tests",
+    "group": "Coding",
+    "description": "Starts a test run and watches the results arrive.",
+    "duration": 12
+  },
+  {
+    "id": "code-review",
+    "name": "Code review",
+    "group": "Coding",
+    "description": "Compares removed and added lines.",
+    "duration": 12
+  },
+  {
+    "id": "deploying",
+    "name": "Building a release",
+    "group": "Coding",
+    "description": "A keystroke, a build, then a little celebration.",
+    "duration": 12
+  },
+  {
+    "id": "email-draft",
+    "name": "Drafting an email",
+    "group": "Work",
+    "description": "Writes a draft and leaves it for review.",
+    "duration": 12
+  },
+  {
+    "id": "calendar-planning",
+    "name": "Finding a time",
+    "group": "Work",
+    "description": "Checks one opening against another.",
+    "duration": 12
+  },
+  {
+    "id": "filing",
+    "name": "Remembering",
+    "group": "Work",
+    "description": "Files a note in its tray.",
+    "duration": 12,
+    "suite": 8
+  },
+  {
+    "id": "searching-files",
+    "name": "Finding a file",
+    "group": "Work",
+    "description": "Lifts a card to take a closer look.",
+    "duration": 12
+  },
+  {
+    "id": "bookmarking",
+    "name": "Keeping a place",
+    "group": "Writing",
+    "description": "Slips a ribbon between the pages.",
+    "duration": 12
+  },
+  {
+    "id": "page-turn",
+    "name": "Turning a page",
+    "group": "Writing",
+    "description": "Lifts, curls and settles a single leaf.",
+    "duration": 12
+  },
+  {
+    "id": "recipe",
+    "name": "Reading a recipe",
+    "group": "Everyday",
+    "description": "Keeps the recipe open beside a kitchen timer.",
+    "duration": 12
+  },
+  {
+    "id": "headphone-listen",
+    "name": "Lost in a song",
+    "group": "Music",
+    "description": "One paw on the headphones, eyes half closed.",
+    "duration": 12
+  },
+  {
+    "id": "drumming",
+    "name": "Finger drumming",
+    "group": "Music",
+    "description": "Alternates paws on the beat.",
+    "duration": 12
+  },
+  {
+    "id": "conducting",
+    "name": "Conducting",
+    "group": "Music",
+    "description": "Shapes a musical phrase with both paws.",
+    "duration": 12
+  },
+  {
+    "id": "tea-break",
+    "name": "Tea break",
+    "group": "Everyday",
+    "description": "Holds a warm mug while the steam rises.",
+    "duration": 12
+  },
+  {
+    "id": "sipping",
+    "name": "Coffee",
+    "group": "Life",
+    "description": "Lifts the mug for a warm sip.",
+    "duration": 12,
+    "suite": 12
+  },
+  {
+    "id": "countdown",
+    "name": "Watching the timer",
+    "group": "Everyday",
+    "description": "Sets the dial and keeps an eye on it.",
+    "duration": 12
+  },
+  {
+    "id": "breathing",
+    "name": "Breathing together",
+    "group": "Everyday",
+    "description": "An unhurried inhale and exhale.",
+    "duration": 12
+  },
+  {
+    "id": "stretching",
+    "name": "A proper stretch",
+    "group": "Everyday",
+    "description": "Reaches up, leans side to side, and settles.",
+    "duration": 12
+  },
+  {
+    "id": "dj",
+    "name": "On the decks",
+    "group": "Music",
+    "description": "Two paws cue and scratch the jog wheels.",
+    "duration": 12
+  },
+  {
+    "id": "piano",
+    "name": "Playing keys",
+    "group": "Music",
+    "description": "A small melody with alternating paws.",
+    "duration": 12
+  }
+]

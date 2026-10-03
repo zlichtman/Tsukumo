@@ -1,0 +1,293 @@
+name: KemoSabeMac
+options:
+  bundleIdPrefix: com.zlichtman
+  deploymentTarget:
+    macOS: '26.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    DEVELOPMENT_TEAM: 28LJG7MXT3
+    MARKETING_VERSION: '1.0.0'
+    CURRENT_PROJECT_VERSION: 77
+    # Sign in with Apple: YES signs with KemoSabeMac-SignInWithApple.entitlements and shows the
+    # button. Turn on only after the App ID has the capability and provisioning is regenerated.
+    KEMO_SIGN_IN_WITH_APPLE: 'YES'
+    # Account sync (iCloud, CloudKit): YES signs with KemoSabeMac-Sync.entitlements (adds the container
+    # iCloud.com.zlichtman.kemosabe) and lets the app sync. Needs KEMO_SIGN_IN_WITH_APPLE too. Turn on
+    # only once the container exists and is assigned to the App ID. KEMO_CLOUDKIT_ENVIRONMENT keeps the
+    # development-signed Mac app in the same CloudKit environment as the iPhone's TestFlight builds.
+    KEMO_ICLOUD_SYNC: 'YES'
+    # Private Cloud needs Apple's managed entitlement; without it FoundationModels traps on device.
+    KEMO_PRIVATE_CLOUD: 'NO'
+    KEMO_CLOUDKIT_ENVIRONMENT: Production
+packages:
+  # Terminal emulator for Tsukumo (MIT). Pinned; reviewed September 24, 2026, including its
+  # build plugin, which only reads its own git metadata to generate a version file.
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    exactVersion: 1.19.0
+  SwiftTransformers:
+    url: https://github.com/huggingface/swift-transformers.git
+    revision: 9088d55148b799e853cf4e039b0f0a1e3efe034c
+  # On-device neural voices (MIT), shared with the iPhone. See design/VOICE-ENGINES.md.
+  MLXAudio:
+    url: https://github.com/Blaizzy/mlx-audio-swift.git
+    revision: 01dec7c9bdce3088a6b6b7ab9f2e403458195efb
+targets:
+  KemoSabeMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: KemoSabeMac
+        excludes: [Info.plist, KemoSabeMac.entitlements, KemoSabeMac-SignInWithApple.entitlements, KemoSabeMac-Sync.entitlements]
+      - path: ../ios/KemoSabe/ActionSchema.swift
+      - path: ../ios/KemoSabe/APIModelProvider.swift
+      - path: ../ios/KemoSabe/APIModelPresets.swift
+      - path: ../ios/KemoSabe/UtteranceRecorder.swift
+      - path: ../ios/KemoSabe/CloudAudio.swift
+      - path: ../ios/KemoSabe/ThemeNames.swift
+      - path: ../ios/KemoSabe/PeopleMedia.swift
+      - path: ../ios/KemoSabe/AccountSync.swift
+      - path: ../ios/KemoSabe/CloudKitSync.swift
+      - path: ../ios/KemoSabe/SyncService.swift
+      - path: ../ios/KemoSabe/KemoNotifications.swift
+      - path: ../ios/KemoSabe/AppStoreSync.swift
+      - path: ../ios/KemoSabe/Collaboration.swift
+      - path: ../ios/KemoSabe/DayCalendar.swift
+      # Reply voices behind one speech-engine boundary: Apple, OpenAI, Kokoro, and your own voice.
+      - path: ../ios/KemoSabe/SpeechEngine.swift
+      - path: ../ios/KemoSabe/SpeechVoices.swift
+      - path: ../ios/KemoSabe/VoiceModelPacks.swift
+      - path: ../ios/KemoSabe/VoiceModelDownloads.swift
+      - path: ../ios/KemoSabe/NeuralSpeechEngines.swift
+      - path: ../ios/KemoSabe/OwnVoice.swift
+      - path: ../ios/KemoSabe/OwnVoiceAudio.swift
+      - path: ../ios/KemoSabe/NeuralVoiceSettings.swift
+      - path: ../ios/KemoSabe/VoiceChooser.swift
+      - path: ../ios/KemoSabe/AboutVoices.swift
+      - path: ../ios/KemoSabe/OnDeviceWhisper.swift
+      - path: ../ios/KemoSabe/ArtworkCompanion.swift
+      - path: ../ios/KemoSabe/ArtworkPerformance.swift
+      - path: ../ios/KemoSabe/AnimationGallery.swift
+      - path: ../ios/KemoSabe/Assistant.swift
+      - path: ../ios/KemoSabe/BrandStyle.swift
+      - path: ../ios/KemoSabe/CharacterArtwork.swift
+      - path: ../ios/KemoSabe/ChatComponents.swift
+      - path: ../ios/KemoSabe/ChatStage.swift
+      - path: ../ios/KemoSabe/ChatComposerPanel.swift
+      # The chat model chip's power-up picker, shared with Tsukumo's coding slider.
+      - path: ../ios/KemoSabe/ChatModelPicker.swift
+      - path: ../ios/KemoSabe/PowerControls.swift
+      - path: ../ios/KemoSabe/ModelEffort.swift
+      - path: ../ios/KemoSabe/ChatImages.swift
+      - path: ../ios/KemoSabe/CompanionPlanning.swift
+      - path: ../ios/KemoSabe/CompanionPolicy.swift
+      - path: ../ios/KemoSabe/ConnectorRecords.swift
+      - path: ../ios/KemoSabe/Connectors.swift
+      - path: ../ios/KemoSabe/ContextBroker.swift
+      # The context harness: recipients, privacy levels, one policy, and agents' requests (design/CONTEXT-HARNESS.md).
+      - path: ../ios/KemoSabe/ContextPolicy.swift
+      - path: ../ios/KemoSabe/ContextPrivacy.swift
+      - path: ../ios/KemoSabe/ContextPrivacyViews.swift
+      - path: ../ios/KemoSabe/AgentRequest.swift
+      - path: ../ios/KemoSabe/AgentRequestCard.swift
+      # Context packets: a chat's context moving to another chat, an agent, or a Tsukumo task (design/CONTEXT-HARNESS.md#context-packets).
+      - path: ../ios/KemoSabe/ContextPacket.swift
+      - path: ../ios/KemoSabe/ContextPacketViews.swift
+      # Agents asking KemoSabe through the MCP helper (design/CONTEXT-HARNESS.md#agents-asking-kemosabe).
+      - path: ../ios/KemoSabe/AgentQuestion.swift
+      - path: ../ios/KemoSabe/AgentQuestionViews.swift
+      # Personal sources for agents' questions: Messages here (MacMessagesSource.swift), excerpts, levels (design/CONTEXT-HARNESS.md#personal-sources).
+      - path: ../ios/KemoSabe/PersonalSources.swift
+      - path: ../ios/KemoSabe/ChatHandoff.swift
+      # Claude from iPhone: the protocol, the same-Wi‑Fi transport, and both ends of a session
+      # (design/CONTEXT-HARNESS.md#claude-through-your-mac).
+      - path: ../ios/KemoSabe/MacRelay.swift
+      - path: ../ios/KemoSabe/MacRelayNetwork.swift
+      - path: ../ios/KemoSabe/MacRelaySession.swift
+      - path: ../ios/KemoSabe/MacRelaySync.swift
+      - path: KemoSabeMCP/KemoSabeBridgeWire.swift
+      - path: ../ios/KemoSabe/ContextPaging.swift
+      - path: ../ios/KemoSabe/ContextOrchestrator.swift
+      - path: ../ios/KemoSabe/ContextRunJournal.swift
+      - path: ../ios/KemoSabe/ContinuousContext.swift
+      - path: ../ios/KemoSabe/ConversationArchiveView.swift
+      - path: ../ios/KemoSabe/DeveloperMode.swift
+      - path: ../ios/KemoSabe/CompanionIdentity.swift
+      - path: ../ios/KemoSabe/CompanionIntro.swift
+      - path: ../ios/KemoSabe/Onboarding.swift
+      - path: ../ios/KemoSabe/AccountStore.swift
+      - path: ../ios/KemoSabe/AccountDirectory.swift
+      - path: ../ios/KemoSabe/AccountSession.swift
+      - path: ../ios/KemoSabe/SettingsCatalog.swift
+      - path: ../ios/KemoSabe/CompanionPaletteTile.swift
+      - path: ../ios/KemoSabe/VoiceGlow.swift
+      # Docs and Journal in Library, shared with the iPhone (design/DOCS-AND-JOURNAL.md).
+      - path: ../ios/KemoSabe/DocsModel.swift
+      - path: ../ios/KemoSabe/DocMarkdown.swift
+      - path: ../ios/KemoSabe/JournalModel.swift
+      - path: ../ios/KemoSabe/DocsStore.swift
+      - path: ../ios/KemoSabe/DocsAttachments.swift
+      - path: ../ios/KemoSabe/DocEditor.swift
+      - path: ../ios/KemoSabe/DocPageEditor.swift
+      - path: ../ios/KemoSabe/JournalViews.swift
+      - path: ../ios/KemoSabe/DocAttachmentViews.swift
+      - path: ../ios/Vendor/ThinkingOrbs
+        excludes: [LICENSE, README.md]
+      - path: ../ios/KemoSabe/ShortcutsIntegration.swift
+      - path: ../ios/KemoSabe/ConversationModel.swift
+      - path: ../ios/KemoSabe/AppleCloudModel.swift
+      - path: ../ios/KemoSabe/ExplicitRequest.swift
+      - path: ../ios/KemoSabe/ConversationRuntime.swift
+      - path: ../ios/KemoSabe/CoreMLLayaProvider.swift
+      # System One: Laya on this device (with the person's own layer), Jev with the person's key
+      # (design/UNIFIED-HARNESS.md, design/LAYA-TRAINING.md).
+      - path: ../ios/KemoSabe/LayaModel.swift
+      - path: ../ios/KemoSabe/JevDecisionProvider.swift
+      - path: ../ios/KemoSabe/SystemOne.swift
+      - path: ../ios/KemoSabe/SystemOnePersonal.swift
+      - path: ../ios/KemoSabe/SystemOneViews.swift
+      - path: ../ios/KemoSabe/TrainingViews.swift
+      - path: ../ios/KemoSabe/DailyAssistant.swift
+      - path: ../ios/KemoSabe/KnowledgeVault.swift
+      - path: ../ios/KemoSabe/MemoryContextBridge.swift
+      - path: ../ios/KemoSabe/ModelConnectionsView.swift
+      - path: ../ios/KemoSabe/Models.swift
+      - path: ../ios/KemoSabe/PeopleDirectory.swift
+      - path: ../ios/KemoSabe/PeopleContacts.swift
+      - path: ../ios/KemoSabe/PeopleView.swift
+      - path: ../ios/KemoSabe/PickedImage.swift
+      - path: ../ios/KemoSabe/MusicArtwork.swift
+      - path: ../ios/KemoSabe/NativeRoutineTools.swift
+      - path: ../ios/KemoSabe/NearbyDisclosure.swift
+      - path: ../ios/KemoSabe/NearbyKemos.swift
+      - path: ../ios/KemoSabe/NearbyLocalModel.swift
+      - path: ../ios/KemoSabe/PersonalRoutineSettings.swift
+      - path: ../ios/KemoSabe/PersonalDecisions.swift
+      - path: ../ios/KemoSabe/PreferenceLearner.swift
+      - path: ../ios/KemoSabe/PropArtwork.swift
+      - path: ../ios/KemoSabe/RoutineLedger.swift
+      - path: ../ios/KemoSabe/RoutineStore.swift
+      - path: ../ios/KemoSabe/RoutineTasks.swift
+      - path: ../ios/KemoSabe/VoiceCommands.swift
+      - path: ../ios/KemoSabe/VoicePolicy.swift
+      - path: ../ios/KemoSabe/WritingArtwork.swift
+      - path: ../ios/KemoSabe/WritingMotion.swift
+      - path: ../ios/KemoSabe/KemoArtwork.metal
+      - path: ../ios/KemoSabe/Resources/Character
+        type: folder
+        buildPhase: resources
+      - path: ../ios/KemoSabe/Resources/Assets.xcassets
+        buildPhase: resources
+      - path: ../ios/KemoSabe/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: ../ios/KemoSabe/Resources/Laya-NOTICE.txt
+        buildPhase: resources
+      - path: ../ios/KemoSabe/Resources/ThinkingOrbs-LICENSE.txt
+        buildPhase: resources
+      - path: ../ios/KemoSabe/Resources/VoiceEngines-NOTICE.txt
+        buildPhase: resources
+      - path: ../ios/KemoSabe/Resources/AgentLogos-NOTICE.txt
+        buildPhase: resources
+      - path: ../ios/KemoSabe/Resources/Fonts
+        type: folder
+        buildPhase: resources
+    dependencies:
+      # The KemoSabe MCP server agents start over stdio: Tsukumo.app/Contents/Helpers/kemosabe-mcp.
+      - target: kemosabe-mcp
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+      - package: SwiftTerm
+      - package: SwiftTransformers
+        product: Tokenizers
+      - package: SwiftTransformers
+        product: Hub
+      - package: MLXAudio
+        product: MLXAudioTTS
+      - package: MLXAudio
+        product: MLXAudioCore
+      # On-device Whisper transcription (design/VOICE-ENGINES.md#on-device-whisper-september-26-2026).
+      - package: MLXAudio
+        product: MLXAudioSTT
+    settings:
+      base:
+        PRODUCT_NAME: Tsukumo
+        PRODUCT_MODULE_NAME: KemoSabeMac
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.kemosabe.mac
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: KemoSabeMac/Info.plist
+        TSUKUMO_ENTITLEMENTS_YES_NO: KemoSabeMac/KemoSabeMac-SignInWithApple.entitlements
+        TSUKUMO_ENTITLEMENTS_YES_YES: KemoSabeMac/KemoSabeMac-Sync.entitlements
+        TSUKUMO_ENTITLEMENTS_NO_NO: KemoSabeMac/KemoSabeMac.entitlements
+        TSUKUMO_ENTITLEMENTS_NO_YES: KemoSabeMac/KemoSabeMac.entitlements
+        CODE_SIGN_ENTITLEMENTS: $(TSUKUMO_ENTITLEMENTS_$(KEMO_SIGN_IN_WITH_APPLE)_$(KEMO_ICLOUD_SYNC))
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        COMBINE_HIDPI_IMAGES: YES
+  # A small stdio MCP server with one tool, ask_kemosabe, relaying to the running app over a Unix
+  # socket only this user can open. It holds and reads no data.
+  kemosabe-mcp:
+    type: tool
+    platform: macOS
+    sources:
+      - path: KemoSabeMCP
+    settings:
+      base:
+        PRODUCT_NAME: kemosabe-mcp
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.kemosabe.mac.mcp
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+  KemoSabeMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+      - path: ../ios/Tests/APIModelTests.swift
+      - path: ../ios/Tests/PeopleAndImagesTests.swift
+      - path: ../ios/Tests/ContextPagingTests.swift
+      - path: ../ios/Tests/ContextPolicyTests.swift
+      - path: ../ios/Tests/AgentRequestTests.swift
+      - path: ../ios/Tests/ContextPacketTests.swift
+      - path: ../ios/Tests/AgentQuestionTests.swift
+      - path: ../ios/Tests/PersonalSourcesTests.swift
+      - path: ../ios/Tests/MacRelayProtocolTests.swift
+      - path: ../ios/Tests/SpeechEngineTests.swift
+      - path: ../ios/Tests/OnDeviceWhisperTests.swift
+      - path: ../ios/Tests/OnboardingTests.swift
+      - path: ../ios/Tests/RoutingTests.swift
+      - path: ../ios/Tests/PrivateCloudTests.swift
+      - path: ../ios/Tests/ModelEffortTests.swift
+      - path: ../ios/Tests/DayRangeTests.swift
+      - path: ../ios/Tests/PersonalizationSettingsTests.swift
+      - path: ../ios/Tests/DocsTests.swift
+      - path: ../ios/Tests/ChatStageTests.swift
+      - path: ../ios/Tests/OwnVoiceTrainingTests.swift
+      - path: ../ios/Tests/SystemOneTests.swift
+      - path: ../ios/Tests/SystemOneActivationTests.swift
+      - path: ../ios/Tests/SystemOnePersonalTests.swift
+      - path: ../ios/Tests/LayaEvaluationTests.swift
+      - path: ../ios/Tests/ModelsPageTests.swift
+    dependencies:
+      - target: KemoSabeMac
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.kemosabe.mac.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Tsukumo.app/Contents/MacOS/Tsukumo"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  KemoSabeMac:
+    build:
+      targets:
+        KemoSabeMac: all
+    test:
+      targets: [KemoSabeMacTests]
+    archive:
+      config: Release

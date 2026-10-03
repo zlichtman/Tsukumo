@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- KemoSabeMac.entitlements plus Sign in with Apple. Used only when the build setting
+     KEMO_SIGN_IN_WITH_APPLE is YES (macos/project.yml), after the App ID com.zlichtman.kemosabe.mac
+     has the Sign in with Apple capability and its provisioning profile is regenerated.
+     Keep the other keys identical to KemoSabeMac.entitlements. -->
+<plist version="1.0"><dict>
+<key>com.apple.security.device.audio-input</key><true/>
+<key>com.apple.security.personal-information.calendars</key><true/>
+<key>com.apple.security.personal-information.addressbook</key><true/>
+<key>com.apple.developer.applesignin</key><array><string>Default</string></array>
+</dict></plist>

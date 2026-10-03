@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- KemoSabeMac-SignInWithApple.entitlements plus account sync through the person's private iCloud
+     database. Used only when KEMO_SIGN_IN_WITH_APPLE and KEMO_ICLOUD_SYNC are both YES
+     (macos/project.yml), after the iCloud container iCloud.com.zlichtman.kemosabe exists and is
+     assigned to the App ID com.zlichtman.kemosabe.mac. Tsukumo is development-signed, which would
+     use CloudKit's development environment by default; KEMO_CLOUDKIT_ENVIRONMENT (Production) keeps
+     it in the same environment as the iPhone's TestFlight builds, so both see the same data.
+     Keep the other keys identical to KemoSabeMac.entitlements. -->
+<plist version="1.0"><dict>
+<key>com.apple.security.device.audio-input</key><true/>
+<key>com.apple.security.personal-information.calendars</key><true/>
+<key>com.apple.security.personal-information.addressbook</key><true/>
+<key>com.apple.developer.applesignin</key><array><string>Default</string></array>
+<key>com.apple.developer.icloud-container-identifiers</key><array><string>iCloud.com.zlichtman.kemosabe</string></array>
+<key>com.apple.developer.icloud-services</key><array><string>CloudKit</string></array>
+<key>com.apple.developer.icloud-container-environment</key><string>$(KEMO_CLOUDKIT_ENVIRONMENT)</string>
+</dict></plist>

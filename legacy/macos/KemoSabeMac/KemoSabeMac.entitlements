@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Tsukumo runs outside the App Sandbox (September 24, 2026) so its terminal and
+     coding agents can use the person's tools, PATH, git config, and agent logins.
+     These keys cover the hardened runtime's protected resources. -->
+<plist version="1.0"><dict>
+<key>com.apple.security.device.audio-input</key><true/>
+<key>com.apple.security.personal-information.calendars</key><true/>
+<key>com.apple.security.personal-information.addressbook</key><true/>
+</dict></plist>
