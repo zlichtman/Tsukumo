@@ -1,0 +1,114 @@
+# The Tsukumo iPhone app (docs/ARCHITECTURE.md#the-iphone-app). Generate with `xcodegen` in this folder;
+# the .xcodeproj is never committed. No Watch app and no widgets in v1.
+name: Tsukumo
+options:
+  bundleIdPrefix: com.zlichtman
+  deploymentTarget:
+    iOS: '26.0'
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    SWIFT_STRICT_CONCURRENCY: complete
+    DEVELOPMENT_TEAM: 28LJG7MXT3
+    # The version stays 1.0.0; the build number goes up (AGENTS.md rule 2).
+    MARKETING_VERSION: '1.0.0'
+    CURRENT_PROJECT_VERSION: 1
+    # iPhone only.
+    TARGETED_DEVICE_FAMILY: '1'
+    CODE_SIGN_STYLE: Automatic
+    # Capabilities that need Apple's developer portal (the iCloud container iCloud.com.zlichtman.tsukumo
+    # with CloudKit, and Sign in with Apple). Local (the default) signs with no such entitlement, so
+    # building registers nothing; the app shows "Waiting for iCloud to be turned on for Tsukumo" and
+    # Sign in with Apple says it isn't ready. Set iCloud only after the owner approves those in the portal
+    # (DEVELOPMENT.md, Known issues). The value is also written into Info.plist (TsukumoCapabilities).
+    TSUKUMO_CAPABILITIES: Local
+packages:
+  TsukumoKit:
+    path: ../../TsukumoKit
+targets:
+  Tsukumo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Tsukumo
+        excludes: [Resources/PrivacyInfo.xcprivacy]
+      - path: Tsukumo/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: TsukumoKit
+        product: TsukumoCore
+      - package: TsukumoKit
+        product: TsukumoUI
+      - package: TsukumoKit
+        product: TsukumoPolicy
+      - package: TsukumoKit
+        product: TsukumoContext
+      - package: TsukumoKit
+        product: TsukumoGate
+      - package: TsukumoKit
+        product: TsukumoSystemOne
+      - package: TsukumoKit
+        product: TsukumoEngines
+      - package: TsukumoKit
+        product: TsukumoSync
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.tsukumo
+        PRODUCT_NAME: Tsukumo
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Config/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Tsukumo-$(TSUKUMO_CAPABILITIES).entitlements
+        INFOPLIST_KEY_CFBundleDisplayName: Tsukumo
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        # Portrait on iPhone. The iPad list only satisfies Xcode's check (the app is iPhone only), so
+        # no deprecated UIRequiresFullScreen is needed.
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        # Privacy usage strings only for sources the app reads: KemoSabe's Calendar and Reminders, read
+        # on this iPhone only after the owner turns the source on in Settings, KemoSabe.
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: KemoSabe reads your calendar on this iPhone to answer your bots' questions, such as when you're free. Only the answer leaves, and only to a bot you've allowed.
+        INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: KemoSabe reads your reminders on this iPhone to answer your bots' questions. Only the answer leaves, and only to a bot you've allowed.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ENABLE_PREVIEWS: YES
+  TsukumoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [TsukumoTests]
+    dependencies:
+      - target: Tsukumo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.tsukumo.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Tsukumo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tsukumo
+        BUNDLE_LOADER: $(TEST_HOST)
+  TsukumoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [TsukumoUITests]
+    dependencies:
+      - target: Tsukumo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.tsukumo.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Tsukumo
+schemes:
+  Tsukumo:
+    build:
+      targets:
+        Tsukumo: all
+        TsukumoTests: [test]
+        TsukumoUITests: [test]
+    test:
+      targets:
+        - name: TsukumoTests
+          parallelizable: false
+        - name: TsukumoUITests
+          parallelizable: false
+    archive:
+      config: Release

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into the generated Info.plist. TsukumoCapabilities tells the app whether this build carries
+     the iCloud and Sign in with Apple entitlements (TsukumoSync's CloudCapability reads it). -->
+<plist version="1.0">
+<dict>
+	<key>TsukumoCapabilities</key>
+	<string>$(TSUKUMO_CAPABILITIES)</string>
+</dict>
+</plist>
