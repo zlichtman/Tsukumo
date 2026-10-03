@@ -1,0 +1,237 @@
+name: KemoSabe
+options:
+  bundleIdPrefix: com.zlichtman
+  deploymentTarget:
+    iOS: '26.0'
+    watchOS: '26.0'
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    DEVELOPMENT_TEAM: 28LJG7MXT3
+    MARKETING_VERSION: '1.0.0'
+    CURRENT_PROJECT_VERSION: 69
+    TARGETED_DEVICE_FAMILY: '1,2'
+    # Sign in with Apple: YES adds com.apple.developer.applesignin (KemoSabe/SignInWithApple.entitlements)
+    # and shows the button. Turn on only after the App ID has the capability and provisioning is
+    # regenerated, or device and archive builds fail to sign. See design/ACCOUNTS-AND-PROFILES.md.
+    KEMO_SIGN_IN_WITH_APPLE: 'YES'
+    # Account sync (iCloud, CloudKit): YES signs with KemoSabe/KemoSabe.entitlements (Sign in with
+    # Apple plus the container iCloud.com.zlichtman.kemosabe and push) and lets the app sync. Needs
+    # KEMO_SIGN_IN_WITH_APPLE too. Turn on only once the container exists and is assigned to the
+    # App ID, or signing fails. See design/ACCOUNTS-AND-PROFILES.md.
+    KEMO_ICLOUD_SYNC: 'YES'
+    # Private Cloud needs Apple's managed entitlement; without it FoundationModels traps on device.
+    KEMO_PRIVATE_CLOUD: 'NO'
+packages:
+  SwiftTransformers:
+    url: https://github.com/huggingface/swift-transformers.git
+    revision: 9088d55148b799e853cf4e039b0f0a1e3efe034c
+  # On-device neural voices (MIT): Kokoro-82M for Kemo's read-aloud and Kyutai's Pocket TTS for
+  # the person's own cloned voice, both run with MLX on Apple silicon. Pinned; reviewed
+  # September 25, 2026. See design/VOICE-ENGINES.md and ios/VOICE-ENGINES-NOTICE.md.
+  MLXAudio:
+    url: https://github.com/Blaizzy/mlx-audio-swift.git
+    revision: 01dec7c9bdce3088a6b6b7ab9f2e403458195efb
+targets:
+  KemoSabe:
+    type: application
+    platform: iOS
+    sources:
+      - path: KemoSabe
+        excludes: [Resources, Info.plist, MemoryDatabase.swift, DelegatedWork.swift]
+      - path: Vendor/ThinkingOrbs
+        excludes: [LICENSE, README.md]
+      # The watch's palette recolor, which the Live Activity views share (KemoVoiceActivityViews).
+      - path: KemoSabeWatch/KemoTint.swift
+      - path: KemoSabe/Resources/Character
+        type: folder
+        buildPhase: resources
+      - path: KemoSabe/Resources/Assets.xcassets
+        buildPhase: resources
+      - path: ../macos/KemoSabeMac/ThemePresets.json
+        buildPhase: resources
+      - path: KemoSabe/Resources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      - path: KemoSabe/Resources/Laya-NOTICE.txt
+        buildPhase: resources
+      - path: KemoSabe/Resources/ThinkingOrbs-LICENSE.txt
+        buildPhase: resources
+      - path: KemoSabe/Resources/VoiceEngines-NOTICE.txt
+        buildPhase: resources
+      - path: KemoSabe/Resources/AgentLogos-NOTICE.txt
+        buildPhase: resources
+      - path: KemoSabe/Resources/Fonts
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: SwiftTransformers
+        product: Tokenizers
+      - package: SwiftTransformers
+        product: Hub
+      - package: MLXAudio
+        product: MLXAudioTTS
+      - package: MLXAudio
+        product: MLXAudioCore
+      # On-device Whisper transcription (design/VOICE-ENGINES.md#on-device-whisper-september-26-2026).
+      - package: MLXAudio
+        product: MLXAudioSTT
+      - target: KemoSabeWatch
+      # Kemo's Live Activity and the Talk to Kemo Control (design/KEMO-VOICE-ANYWHERE.md).
+      - target: KemoSabeWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.kemosabe
+        # ContactsUI's access picker doesn't exist on macOS; weak-linked so the iPhone app still loads on
+        # Apple silicon Macs (ITMS-90863, build 58), where People imports without it.
+        OTHER_LDFLAGS: $(inherited) -weak_framework ContactsUI
+        KEMO_ENTITLEMENTS_YES_NO: KemoSabe/SignInWithApple.entitlements
+        KEMO_ENTITLEMENTS_YES_YES: KemoSabe/KemoSabe.entitlements
+        KEMO_ENTITLEMENTS_NO_NO: ''
+        KEMO_ENTITLEMENTS_NO_YES: ''
+        CODE_SIGN_ENTITLEMENTS: $(KEMO_ENTITLEMENTS_$(KEMO_SIGN_IN_WITH_APPLE)_$(KEMO_ICLOUD_SYNC))
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: KemoSabe/Info.plist
+        INFOPLIST_KEY_CFBundleDisplayName: KemoSabe
+        INFOPLIST_KEY_NSAlarmKitUsageDescription: KemoSabe schedules wake-up alarms only after you review and approve the exact time.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: KemoSabe listens while the app is open, including its settings and connection drawers, so you can control it by voice, and for one request when you use Talk to KemoSabe from the Action button, a Control, or Siri. Audio is not saved.
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: KemoSabe reads your schedule and creates or moves its own time blocks only under your approved routine permissions.
+        INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: KemoSabe reads reminders and creates or reschedules its own reminders only under your approved routine permissions.
+        INFOPLIST_KEY_NSContactsUsageDescription: KemoSabe finds the contact details you ask for and imports the people you choose into private profiles. It never edits your address book.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: KemoSabe reads this iPhone's approximate location only when you turn on Location in Connections and a question needs it, such as finding a place near you. It isn't saved.
+        INFOPLIST_KEY_NSCameraUsageDescription: KemoSabe's camera takes photos for your profile, a chat message, or a doc or journal entry. Photos stay on this iPhone unless you send or save one.
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: KemoSabe saves a photo to your library only when you tap Save to Photos.
+        INFOPLIST_KEY_NSAppleMusicUsageDescription: KemoSabe reads your music library on this iPhone to show your top artists, songs, and genres on your profile, from its play counts, and the songs you pick. Nothing leaves this iPhone.
+        INFOPLIST_KEY_NSFaceIDUsageDescription: KemoSabe uses Face ID only to unlock your journal, when you turn on the journal lock.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: KemoSabe converts your speech to text on this device to understand your requests. There is no network speech fallback.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+  KemoSabeWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KemoSabeWidgets
+        excludes: [Info.plist]
+      # Shared with the app: the Live Activity's data and the intents a Control and the Stop button name.
+      - path: KemoSabe/VoiceAnywhereModel.swift
+      - path: KemoSabe/VoiceAnywhereIntents.swift
+      - path: KemoSabe/KemoVoiceActivityViews.swift
+      # The approved frames recolored to the companion's palette, as on the watch.
+      - path: KemoSabeWatch/KemoTint.swift
+      - path: Vendor/ThinkingOrbs
+        excludes: [LICENSE, README.md]
+    info:
+      path: KemoSabeWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: KemoSabe
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.kemosabe.widgets
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+  KemoSabeWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: KemoSabeWatch
+      - path: KemoSabe/WatchLinkProtocol.swift
+      - path: Vendor/ThinkingOrbs
+        excludes: [LICENSE, README.md]
+    dependencies:
+      - target: KemoSabeWatchWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.kemosabe.watchkitapp
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: KemoSabe
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.zlichtman.kemosabe
+        INFOPLIST_KEY_WKRunsIndependentlyOfCompanionApp: NO
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: KemoSabe records only after you tap Talk. The clip goes to KemoSabe on your iPhone, which transcribes it there and deletes it.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        # A keychain group shared with the complication for Kemo's pet meters (KemoVitalsMirror).
+        CODE_SIGN_ENTITLEMENTS: KemoSabeWatch/KemoSabeWatch.entitlements
+        CODE_SIGN_STYLE: Automatic
+  KemoSabeWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: KemoSabeWatchWidgets
+        excludes: [Info.plist]
+      # Kemo's pet mood on the watch face, read from the watch app's shared copy.
+      - path: KemoSabeWatch/KemoVitals.swift
+      - path: KemoSabeWatch/KemoVitalsMirror.swift
+      # The Talk to Kemo Control's intent (it runs in the watch app).
+      - path: KemoSabeWatch/TalkControlIntent.swift
+    info:
+      path: KemoSabeWatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: KemoSabe
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.kemosabe.watchkitapp.widgets
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: KemoSabeWatchWidgets/KemoSabeWatchWidgets.entitlements
+        CODE_SIGN_STYLE: Automatic
+  KemoSabeWatchUITests:
+    type: bundle.ui-testing
+    platform: watchOS
+    sources: [WatchUITests]
+    dependencies:
+      - target: KemoSabeWatch
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  KemoSabeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+      # The watch's palette recolor is part of the app now (Live Activity); tests reach it by @testable import.
+      # Kemo's pet meters and nudge rules on the watch.
+      - path: KemoSabeWatch/KemoVitals.swift
+      - path: EvaluationAssets
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: KemoSabe
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+  KemoSabeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: KemoSabe
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  KemoSabe:
+    build:
+      targets:
+        KemoSabe: all
+    test:
+      targets: [KemoSabeTests, KemoSabeUITests]
+    archive:
+      config: Release
+  KemoSabeWatch:
+    build:
+      targets:
+        KemoSabeWatch: all
+    test:
+      targets: [KemoSabeWatchUITests]
+    archive:
+      config: Release
