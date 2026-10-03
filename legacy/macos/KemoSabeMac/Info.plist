@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Tsukumo</string>
+	<key>CFBundleIconFile</key>
+	<string>Tsukumo.icns</string>
+	<key>KemoSignInWithApple</key>
+	<string>$(KEMO_SIGN_IN_WITH_APPLE)</string>
+	<key>KemoICloudSync</key>
+	<string>$(KEMO_ICLOUD_SYNC)</string>
+	<key>KemoPrivateCloud</key>
+	<string>$(KEMO_PRIVATE_CLOUD)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Tsukumo reads your schedule and changes its own blocks only after approval.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Tsukumo reads contacts you allow and imports selected people into private profiles. It never edits your address book.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Tsukumo contacts a model server only when you configure it and choose to send a message, and, when you turn on Claude from iPhone, answers your paired iPhone on the same Wi‑Fi.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_kemosabe-relay._tcp</string>
+	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Tsukumo uses the microphone when you press the mic to dictate. Audio is processed on this Mac and is not saved.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Tsukumo reads reminders and changes its own reminders only after approval.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Tsukumo converts dictation to text on this Mac. Review the text before sending it to your selected model.</string>
+</dict>
+</plist>

@@ -1,0 +1,10 @@
+Agent logos (Assets.xcassets/AgentLogos)
+
+These marks identify the coding agents Tsukumo can run. They are trademarks of their owners, used only
+to name each agent, unmodified except for size and one-color tint. KemoSabe/Tsukumo isn't affiliated
+with or endorsed by these companies.
+
+- Claude Spark (Clay): Anthropic, PBC. Source: Anthropic press kit (anthropic.com/press-kit), Claude logos → Claude Spark.
+- OpenAI Blossom: OpenAI. Source: openai.com/brand → openai-logos.zip.
+- Muse "M": Meta Platforms, Inc. Source: the menu bar glyph in Meta's Muse.app (Meta publishes no standalone Muse mark).
+- Cursor cube (2D light and dark): Anysphere, Inc. Source: cursor.com/brand → cursor-brand-assets.zip.

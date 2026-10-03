@@ -1,0 +1,94 @@
+{
+  "state": "The person prefers focused work in the afternoon and has a meeting at 17:00.",
+  "questions": {
+    "fit": {
+      "type": "choice",
+      "instructions": "Which time suits a person who prefers afternoon focus?",
+      "criteria": [
+        "09:00",
+        "14:00",
+        "17:00"
+      ]
+    }
+  },
+  "inputs": [
+    {
+      "ids": [
+        50281,
+        22122,
+        1953,
+        27,
+        6758,
+        673,
+        19519,
+        247,
+        1436,
+        665,
+        41469,
+        9055,
+        2770,
+        32,
+        50282,
+        50284,
+        15630,
+        27,
+        361,
+        50284,
+        1638,
+        27,
+        361,
+        50284,
+        1722,
+        27,
+        361,
+        50282,
+        510,
+        1436,
+        41469,
+        7106,
+        789,
+        275,
+        253,
+        9055,
+        285,
+        556,
+        247,
+        4804,
+        387,
+        1722,
+        27,
+        361,
+        15,
+        50282
+      ],
+      "markers": [
+        15,
+        19,
+        23
+      ],
+      "qtype": 0
+    }
+  ],
+  "result": {
+    "model": "laya-rl-agent",
+    "answers": {
+      "fit": {
+        "type": "choice",
+        "confidence": 0.9177,
+        "action": {
+          "act_probability": 1.0
+        },
+        "choice": "17:00",
+        "probabilities": {
+          "09:00": 0.0062,
+          "14:00": 0.0093,
+          "17:00": 0.9845
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 46,
+      "output_tokens": 0
+    }
+  }
+}

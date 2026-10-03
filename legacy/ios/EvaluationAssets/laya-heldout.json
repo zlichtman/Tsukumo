@@ -1,0 +1,1541 @@
+{
+ "source": "scripts/train_laya.py dataset(); synthetic rule-derived labels, no personal data",
+ "cases": [
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-0 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "16:00",
+    "11:00",
+    "9:00"
+   ],
+   "label": 3
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "My mornings work better for routine tasks.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-1 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "16:00",
+    "11:00",
+    "14:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "My mornings work better for routine tasks.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-2 corrected their routine: 14:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "16:00",
+    "14:00",
+    "9:00",
+    "11:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "What meetings do I have?",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-3 corrected their routine: 16:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "11:00",
+    "14:00",
+    "16:00",
+    "9:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "My mornings work better for routine tasks.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-4 corrected their routine: 16:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "11:00",
+    "16:00",
+    "14:00",
+    "9:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "Prepare a message I can review.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 3
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-5 corrected their routine: 11:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "9:00",
+    "11:00",
+    "16:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "Prepare a message I can review.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 3
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-6 corrected their routine: 16:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "16:00",
+    "11:00",
+    "9:00",
+    "14:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "What meetings do I have?",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-7 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "16:00",
+    "11:00",
+    "9:00",
+    "14:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "What meetings do I have?",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-8 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "14:00",
+    "11:00",
+    "16:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "Reserve half an hour for studying tomorrow.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-9 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "11:00",
+    "9:00",
+    "16:00",
+    "14:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "What meetings do I have?",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-10 corrected their routine: 11:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "11:00",
+    "9:00",
+    "16:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "What meetings do I have?",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-11 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "16:00",
+    "9:00",
+    "14:00",
+    "11:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "What meetings do I have?",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-12 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "14:00",
+    "11:00",
+    "16:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "What meetings do I have?",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-13 corrected their routine: 14:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "16:00",
+    "11:00",
+    "9:00",
+    "14:00"
+   ],
+   "label": 3
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "Prepare a message I can review.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 3
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-14 corrected their routine: 9:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "16:00",
+    "11:00",
+    "14:00",
+    "9:00"
+   ],
+   "label": 3
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "My mornings work better for routine tasks.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "fit",
+   "state": "The owner calibration-person-15 corrected their routine: 11:00 is the preferred start. Every candidate is available.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "11:00",
+    "16:00",
+    "14:00",
+    "9:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "intent",
+   "state": "Reserve half an hour for studying tomorrow.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "interruption",
+   "state": "New observation: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "calibration",
+   "domain": "missing_information",
+   "state": "Schedule language study sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-0, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "16:00",
+    "9:00",
+    "11:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "From now on, suggest routine blocks in the evening.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-1, the stated first-choice hour is 16:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "14:00",
+    "11:00",
+    "16:00"
+   ],
+   "label": 3
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Write a reply, but leave it unsent.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 3
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-2, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "16:00",
+    "11:00",
+    "14:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Arrange a focus block for this afternoon.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-3, the stated first-choice hour is 11:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "16:00",
+    "14:00",
+    "11:00",
+    "9:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Write a reply, but leave it unsent.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 3
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-4, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "11:00",
+    "9:00",
+    "14:00",
+    "16:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "From now on, suggest routine blocks in the evening.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-5, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "14:00",
+    "11:00",
+    "16:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "From now on, suggest routine blocks in the evening.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-6, the stated first-choice hour is 11:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "11:00",
+    "16:00",
+    "14:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "From now on, suggest routine blocks in the evening.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-7, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "11:00",
+    "16:00",
+    "9:00"
+   ],
+   "label": 3
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Arrange a focus block for this afternoon.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-8, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "9:00",
+    "16:00",
+    "11:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "From now on, suggest routine blocks in the evening.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-9, the stated first-choice hour is 16:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "16:00",
+    "14:00",
+    "11:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Arrange a focus block for this afternoon.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-10, the stated first-choice hour is 14:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "14:00",
+    "11:00",
+    "16:00"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Write a reply, but leave it unsent.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 3
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-11, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "9:00",
+    "16:00",
+    "14:00",
+    "11:00"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Tell me what is on today's calendar.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-12, the stated first-choice hour is 16:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "11:00",
+    "16:00",
+    "9:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Tell me what is on today's calendar.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-13, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "11:00",
+    "16:00",
+    "9:00",
+    "14:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Tell me what is on today's calendar.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning tomorrow at 14:00 for 30 minutes. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-14, the stated first-choice hour is 16:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "11:00",
+    "9:00",
+    "16:00",
+    "14:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Arrange a focus block for this afternoon.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a requested task starts in five minutes and now conflicts with a meeting. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 1
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "fit",
+   "state": "For test-person-15, the stated first-choice hour is 9:00. There are no scheduling conflicts among these options.",
+   "instruction": "Which start time best matches the explicit preference?",
+   "options": [
+    "14:00",
+    "11:00",
+    "9:00",
+    "16:00"
+   ],
+   "label": 2
+  },
+  {
+   "split": "test",
+   "domain": "intent",
+   "state": "Write a reply, but leave it unsent.",
+   "instruction": "What is the current user requesting?",
+   "options": [
+    "plan routine",
+    "read schedule",
+    "correct preference",
+    "prepare draft"
+   ],
+   "label": 3
+  },
+  {
+   "split": "test",
+   "domain": "interruption",
+   "state": "Incoming change: a non-urgent idea with no deadline. The owner asked for interruptions only for imminent conflicts.",
+   "instruction": "Which response fits the explicit interruption rule?",
+   "options": [
+    "wait for the next check-in",
+    "notify about the imminent conflict"
+   ],
+   "label": 0
+  },
+  {
+   "split": "test",
+   "domain": "missing_information",
+   "state": "Schedule project planning sometime. No other date or time is known.",
+   "instruction": "Are the day, start time, and duration all specified?",
+   "options": [
+    "missing information",
+    "fully specified"
+   ],
+   "label": 0
+  }
+ ]
+}
