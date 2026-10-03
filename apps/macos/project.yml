@@ -1,0 +1,80 @@
+# Tsukumo for Mac: the side dock of your bots, in the menu bar (docs/ARCHITECTURE.md#the-tsukumo-mac-app).
+# Version 2.<NN> (AGENTS.md rule 2): build 200 is version 2.00.
+# Developer ID, hardened runtime, not sandboxed (it runs coding agents and reads the files they work on).
+# Generate with `xcodegen` in this folder; the .xcodeproj is never committed.
+name: Tsukumo
+options:
+  bundleIdPrefix: com.zlichtman
+  deploymentTarget:
+    macOS: '26.0'
+settings:
+  base:
+    SWIFT_VERSION: '6.0'
+    SWIFT_STRICT_CONCURRENCY: complete
+    DEVELOPMENT_TEAM: 28LJG7MXT3
+    CODE_SIGN_STYLE: Automatic
+    # The Dock is version 2.<NN>: build 200 is 2.00, build 201 is 2.01.
+    # scripts/release-mac.sh sets both lines for each release.
+    CURRENT_PROJECT_VERSION: 200
+    MARKETING_VERSION: '2.00'
+    # As in apps/ios: Local (the default) has no entitlement that needs Apple's developer portal; iCloud
+    # adds the container iCloud.com.zlichtman.tsukumo with CloudKit and Sign in with Apple, only after the
+    # owner approves them for com.zlichtman.tsukumo.mac.
+    TSUKUMO_CAPABILITIES: Local
+packages:
+  TsukumoKit:
+    path: ../../TsukumoKit
+targets:
+  Tsukumo:
+    type: application
+    platform: macOS
+    sources:
+      - path: Tsukumo
+    dependencies:
+      - package: TsukumoKit
+        product: TsukumoCore
+      - package: TsukumoKit
+        product: TsukumoPolicy
+      - package: TsukumoKit
+        product: TsukumoContext
+      - package: TsukumoKit
+        product: TsukumoGate
+      - package: TsukumoKit
+        product: TsukumoEngines
+      - package: TsukumoKit
+        product: TsukumoSync
+      - package: TsukumoKit
+        product: TsukumoUI
+      - package: TsukumoKit
+        product: TsukumoDock
+      - sdk: ServiceManagement.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.tsukumo.mac
+        PRODUCT_NAME: Tsukumo
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE: Config/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Tsukumo-$(TSUKUMO_CAPABILITIES).entitlements
+        INFOPLIST_KEY_CFBundleDisplayName: Tsukumo
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Zach Lichtman"
+        INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "KemoSabe reads your calendar on this Mac only when a bot asks it something, and shares only the answer you allow."
+        INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: "KemoSabe reads your reminders on this Mac only when a bot asks it something, and shares only the answer you allow."
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # The menu bar item and the side dock: no Dock icon.
+        INFOPLIST_KEY_LSUIElement: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_PREVIEWS: YES
+schemes:
+  Tsukumo:
+    build:
+      targets:
+        Tsukumo: all
+    run:
+      config: Debug
+      commandLineArguments:
+        "--demo": false
+        "--ui-testing": false
+    archive:
+      config: Release

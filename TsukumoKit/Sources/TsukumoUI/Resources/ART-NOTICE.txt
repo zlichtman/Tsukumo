@@ -1,0 +1,11 @@
+TsukumoUI artwork
+
+- KemoSabe.png and KemoSabeSearching.png: KemoSabe's companion artwork, baked from the original plates
+  in the old KemoSabe app's Resources/Character/Artwork (body-clean-v3, paws-v3, computer-v4; in legacy/ios/KemoSabe/Resources/Character/Artwork)
+  at their resting pose.
+- TsukumoMark.png and TsukumoWordmark.png: cropped from legacy/macos/KemoSabeMac/Brand/Tsukumo.png.
+- EngineMarkClaude.png and EngineMarkOpenAI.png: marks that identify the engine a bot runs on. They are
+  trademarks of their owners, used only to name each engine, unmodified except for size and one-color
+  tint. Tsukumo isn't affiliated with or endorsed by these companies.
+  - Claude Spark (Clay): Anthropic, PBC. Source: Anthropic press kit (anthropic.com/press-kit).
+  - OpenAI Blossom: OpenAI. Source: openai.com/brand.
