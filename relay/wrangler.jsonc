@@ -1,0 +1,65 @@
+{
+  // The Tsukumo relay. Deploying is the owner's step (relay/README.md, "Deploy").
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tsukumo-relay",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "compatibility_flags": ["enable_request_signal"],
+  "workers_dev": true,
+
+  // Recommended for production: each device on its own origin, https://<id>.<domain>, on a domain
+  // whose zone is on this Cloudflare account (relay/README.md, "Deploy"). Uncomment, set
+  // DEVICE_HOST_SUFFIX below to the same domain, and set "workers_dev": false.
+  // "routes": [
+  //   { "pattern": "tsukumo-relay.example/*", "zone_name": "tsukumo-relay.example" },
+  //   { "pattern": "*.tsukumo-relay.example/*", "zone_name": "tsukumo-relay.example" }
+  // ],
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "DEVICE", "class_name": "DeviceRelay" },
+      { "name": "REGISTRY", "class_name": "Registry" }
+    ]
+  },
+  // SQLite-backed Durable Objects (available on the Workers Free plan).
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DeviceRelay", "Registry"] }],
+
+  // Per client IP (and per device and IP for challenges). Cloudflare's rate limiting allows a
+  // period of 10 or 60 seconds; the namespace ids are this account's own choice.
+  "ratelimits": [
+    { "name": "IP_LIMITER", "namespace_id": "47615", "simple": { "limit": 300, "period": 60 } },
+    { "name": "REGISTER_LIMITER", "namespace_id": "47616", "simple": { "limit": 5, "period": 60 } },
+    { "name": "CHALLENGE_LIMITER", "namespace_id": "47617", "simple": { "limit": 10, "period": 60 } }
+  ],
+
+  "vars": {
+    // Per-device origins: the wildcard domain's apex (tsukumo-relay.example). Empty: the path form.
+    "DEVICE_HOST_SUFFIX": "",
+    // The path form's origin when it differs from the request's own. Empty: the request's own.
+    "PUBLIC_ORIGIN": "",
+    "REQUEST_TIMEOUT_MS": "60000",
+    "STREAM_IDLE_TIMEOUT_MS": "60000",
+    "UPLOAD_IDLE_TIMEOUT_MS": "15000",
+    "UPLOAD_TOTAL_TIMEOUT_MS": "60000",
+    "DEVICE_REQUESTS_PER_MINUTE": "600",
+    "DEVICE_MAX_IN_FLIGHT": "8",
+    "LEASE_DAYS": "30",
+    "MAX_DEVICES": "10000",
+    "REGISTRATIONS_PER_IP_PER_DAY": "3",
+    "RECONCILE_MINUTES": "60",
+    "RECONCILE_BATCH": "250",
+    "RECONCILE_CONCURRENCY": "25"
+  },
+
+  // Only the relay's own log lines (src/log.ts: fixed fields, never bodies, headers, paths, or
+  // queries) are kept. Invocation logs and traces would record each request's full URL (device ids,
+  // OAuth parameters), so both are off, query strings are redacted anywhere a URL still appears,
+  // and nothing is sent to Logpush.
+  "observability": {
+    "enabled": true,
+    "redact_query_string": true,
+    "logs": { "enabled": true, "invocation_logs": false, "head_sampling_rate": 1 },
+    "traces": { "enabled": false }
+  },
+  "logpush": false
+}

@@ -1,0 +1,20 @@
+{
+  "name": "tsukumo-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Tsukumo relay: a public address for the KemoSabe gateway on a Mac, forwarded over one outbound WebSocket. It stores nothing but public keys.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "fake-mac": "node scripts/fake-mac.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261006.1",
+    "typescript": "5.9.3",
+    "wrangler": "4.147.0"
+  }
+}
