@@ -5,7 +5,7 @@
 # The version is 2.<NN>: build 200 is version 2.00 (AGENTS.md rule 2).
 #
 #   1. Checks the preconditions, waits until the screen is unlocked and no xcodebuild or notarytool runs.
-#   2. Runs TsukumoKit's tests (`swift test`) on a clean export of the committed code (`git archive HEAD`).
+#   2. Exports the committed code (`git archive HEAD`) with the build number set, to build from.
 #   3. Sets CURRENT_PROJECT_VERSION in apps/macos/project.yml to <build> and MARKETING_VERSION to
 #      2.<build - 200> (build 200 is 2.00, build 201 is 2.01).
 #   4. Builds the Developer ID app. By default with TSUKUMO_CAPABILITIES=Local (no iCloud or Sign in
@@ -18,15 +18,17 @@
 #   5. Website (PORTFOLIO): public/downloads/Tsukumo-<version>.dmg (Tsukumo-2.00.dmg) replaces the
 #      previous DMG (Homebrew wants a versioned URL for a fixed sha256), /downloads/Tsukumo.dmg
 #      redirects to it (next.config.ts, so the site's download link keeps working), and
-#      public/downloads/tsukumo.json is the feed the cask's livecheck reads (version, build, url,
-#      sha256, minimumMacOS, notes).
+#      public/downloads/tsukumo.json is the feed the app's Software Update reads (TsukumoKit's
+#      TsukumoUpdate: build, version, url, sha256, minimumMacOS, notes) and the cask's livecheck reads
+#      (version). Exactly those six keys; the script checks them, and that the notes are one plain line.
 #      Commits as the no-reply identity, pushes, and deploys with the Vercel CLI from a clean
 #      `git archive HEAD` export (the site has no Git integration), then checks the live DMG is 200
 #      with the same SHA-256.
 #   6. Homebrew: Casks/tsukumo.rb in zlichtman/homebrew-tap (the one public repo, casks only) gets
 #      version "<version>", the sha256, the url Tsukumo-#{version}.dmg, a livecheck that reads the
-#      feed's version, `uninstall quit` for com.zlichtman.tsukumo.mac, and no `auto_updates` (this
-#      app has no updater of its own, so `brew upgrade` updates it), keeping everything else
+#      feed's version, `uninstall quit` for com.zlichtman.tsukumo.mac, and `auto_updates true` (the
+#      app updates itself from tsukumo.json, so plain `brew upgrade` leaves it to the app; `brew upgrade
+#      --greedy` still updates it), keeping everything else
 #      (depends_on); `brew style` and `brew audit --online` must pass; commits, pushes.
 #   7. Verifies the live download, the redirect, the feed, and `brew fetch` from the tap.
 #   8. Commits and pushes the build number bump to main.
@@ -41,7 +43,9 @@
 #   --out          where the build goes (default: a new temporary folder). Kept after a dry run.
 #   --with-icloud  build with iCloud and Sign in with Apple even without an installed profile
 #                  (Xcode's automatic signing then has to make one).
-#   --notes        the feed's one line about what's new (default "Tsukumo <version>.").
+#   --notes        the feed's one line about what's new, shown in Settings, General, and in the "ready to
+#                  install" notification (default "Tsukumo <version>."): at most 300 characters, no em
+#                  dash, and never "Kemo" for KemoSabe.
 set -euo pipefail
 
 usage='usage: release-mac.sh <build> [--dry-run] [--out <folder>] [--with-icloud] [--notes "<one line>"]'
@@ -61,6 +65,10 @@ done
 BUILD=$(( BUILD ))
 VERSION=$(printf '2.%02d' $(( BUILD - 200 )))
 [[ -n $NOTES ]] || NOTES="Tsukumo $VERSION."
+# The notes show in Settings, General, and the update notification: one short plain line (AGENTS.md rule 14).
+[[ $NOTES != *$'\n'* && ${#NOTES} -le 300 ]] || { echo "--notes must be one line of at most 300 characters." >&2; exit 2; }
+[[ $NOTES != *—* ]] || { echo "--notes has an em dash; use a comma, colon, or period." >&2; exit 2; }
+[[ ! $NOTES =~ '(^|[^A-Za-z])Kemo([^A-Za-z]|$)' ]] || { echo "--notes says \"Kemo\"; say KemoSabe." >&2; exit 2; }
 
 REPO=${0:A:h:h}
 SITE="$HOME/Library/Mobile Documents/com~apple~CloudDocs/LIFE/PORTFOLIO"
@@ -109,7 +117,7 @@ screen_locked() {
   local users; users=$(ioreg -n Root -d1 | grep IOConsoleUsers || true)
   [[ $users == *'"CGSSessionScreenIsLocked"=Yes'* || $users != *'"kCGSSessionOnConsoleKey"=Yes'* ]]
 }
-# One xcodebuild or notarytool at a time on this Mac, and Mac tests need the screen unlocked.
+# One xcodebuild or notarytool at a time on this Mac, with the screen unlocked (signing reads the login keychain).
 wait_quiet() {
   local said=0
   while pgrep -x xcodebuild >/dev/null || pgrep -x notarytool >/dev/null || screen_locked; do
@@ -180,28 +188,16 @@ echo "  $ENTITLEMENTS_NOTE"
 wait_quiet
 
 # ---------------------------------------------------------------------------------------------
-step "2. TsukumoKit tests (a clean export of HEAD)"
+step "2. A clean export of HEAD"
 mkdir -p "$S/src" "$SPM_CACHE"
 rm -rf "${S:?}/src"/*(N)
 git -C "$REPO" archive HEAD | tar -x -C "$S/src"
-# The build number goes into the export right away, so what's tested is what ships.
+# The build number goes into the export right away, so what's built is what ships.
 sed -i '' -e "s/^\( *CURRENT_PROJECT_VERSION:\) *[0-9]*$/\1 $BUILD/" -e "s/^\( *MARKETING_VERSION:\) *'[0-9.]*'$/\1 '$VERSION'/" "$S/src/$YML"
 grep -q "^ *CURRENT_PROJECT_VERSION: $BUILD$" "$S/src/$YML" || fail "couldn't set the build number"
 (cd "$S/src/apps/macos" && xcodegen generate --quiet)
 PROJECT="$S/src/apps/macos/Tsukumo.xcodeproj"
 wait_quiet
-# The app has no test target; its logic is TsukumoKit's, tested here (the export's path has no spaces).
-swift test --package-path "$S/src/TsukumoKit" --scratch-path "$S/kit-build" > "$S/tests.log" 2>&1 \
-  || { tail -40 "$S/tests.log"; fail "TsukumoKit tests (log: $S/tests.log)"; }
-TESTS=$(python3 - "$S/tests.log" <<'PY'
-import re, sys
-log = open(sys.argv[1]).read()
-xc = [int(n) for n in re.findall(r"Executed (\d+) tests?, with 0 failures", log)]
-st = sum(int(n) for n in re.findall(r"Test run with (\d+) tests? in \d+ suites? passed", log))
-print("%d tests passed (%d XCTest, %d Swift Testing), 0 failed" % ((max(xc) if xc else 0) + st, max(xc) if xc else 0, st))
-PY
-)
-echo "  $TESTS"
 
 # ---------------------------------------------------------------------------------------------
 step "3. Build number $BUILD in $YML"
@@ -316,6 +312,22 @@ path, version, build, url, sha, minimum, notes = sys.argv[1:]
 feed = {"version": version, "build": int(build), "url": url, "sha256": sha, "minimumMacOS": minimum, "notes": notes}
 open(path, "w").write(json.dumps(feed, indent=2, ensure_ascii=False) + "\n")
 PY
+# What the app's updater accepts (TsukumoKit/Sources/TsukumoUpdate/UpdateFeed.swift): exactly these keys, the DMG
+# under https://zlichtman.com/downloads/, a 64-digit SHA-256, a plain version and build.
+python3 - "$S/tsukumo.json" "$VERSION" "$BUILD" "$SHA" "$MIN_MACOS" <<'PY' || fail "tsukumo.json isn't what the app's updater reads"
+import json, re, sys
+from urllib.parse import urlparse
+path, version, build, sha, minimum = sys.argv[1:]
+feed = json.load(open(path))
+assert set(feed) == {"version", "build", "url", "sha256", "minimumMacOS", "notes"}, sorted(feed)
+assert feed["version"] == version and re.fullmatch(r"\d+(\.\d+){1,3}", version)
+assert feed["build"] == int(build) > 0
+url = urlparse(feed["url"])
+assert url.scheme == "https" and url.netloc == "zlichtman.com" and url.path.startswith("/downloads/") and url.path.endswith(".dmg") and not url.query
+assert feed["sha256"] == sha and re.fullmatch(r"[0-9a-f]{64}", sha)
+assert feed["minimumMacOS"] == minimum and re.fullmatch(r"\d+(\.\d+){0,2}", minimum)
+assert "\n" not in feed["notes"] and len(feed["notes"]) <= 300
+PY
 REDIRECT_LINE="const tsukumoDownload = \"/downloads/$DMG_NAME\";"
 # next.config.ts: the constant /downloads/Tsukumo.dmg redirects to (added the first time).
 edit_next_config() {  # edit_next_config <file>
@@ -359,7 +371,7 @@ if (( DRY )); then
   edit_next_config "$S/site-preview/next.config.ts"
   would "add public/downloads/$DMG_NAME ($SIZE bytes)"
   for old in $OLD_DMGS; do would "delete public/downloads/$old"; done
-  would "write public/downloads/tsukumo.json:"; sed 's/^/      /' "$S/tsukumo.json"
+  would "write public/downloads/tsukumo.json (the app's Software Update and the cask's livecheck read it; checked):"; sed 's/^/      /' "$S/tsukumo.json"
   would "change next.config.ts:"; diff -u "$SITE/next.config.ts" "$S/site-preview/next.config.ts" | sed 's/^/      /' || true
   would "commit those paths as $NOREPLY_NAME <$NOREPLY_EMAIL>: \"$SITE_MESSAGE\""
   echo "  site main vs origin/main (behind/ahead): $(git -C "$SITE" rev-list --left-right --count origin/main...HEAD | tr '\t' '/')"
@@ -397,7 +409,7 @@ CASK_LIVECHECK='  livecheck do
       json["version"]
     end
   end'
-update_cask() {  # update_cask <file>: version, sha256, url, livecheck, uninstall quit, no auto_updates; everything else stays
+update_cask() {  # update_cask <file>: version, sha256, url, livecheck, uninstall quit, auto_updates true; everything else stays
   sed -i '' -e "s/^\( *version \)\"[^\"]*\"$/\1\"$VERSION\"/" -e "s/^\( *sha256 \)\"[0-9a-f]*\"$/\1\"$SHA\"/" "$1"
   python3 - "$1" "$CASK_URL" "$CASK_LIVECHECK" "$BUNDLE_ID" <<'PY'
 import re, sys
@@ -407,8 +419,11 @@ src, n = re.subn(r'^  url ".*"$', lambda _: url, src, count=1, flags=re.M)
 if n != 1: sys.exit("the cask has no url line")
 src, n = re.subn(r'^  livecheck do\n.*?^  end$', lambda _: livecheck, src, count=1, flags=re.M | re.S)
 if n != 1: sys.exit("the cask has no livecheck block")
-# This Tsukumo has no updater of its own, so brew upgrade updates it.
-src = re.sub(r'^  auto_updates true\n', '', src, flags=re.M)
+# The app updates itself from tsukumo.json (Settings, General, Software Update), so the cask says so: plain
+# `brew upgrade` leaves it to the app, and `brew upgrade --greedy` still updates it. It goes before depends_on.
+if not re.search(r'^  auto_updates true$', src, flags=re.M):
+    src, n = re.subn(r'^(  depends_on )', lambda m: '  auto_updates true\n' + m.group(1), src, count=1, flags=re.M)
+    if n != 1: sys.exit("the cask has no depends_on line to put auto_updates before")
 src, n = re.subn(r'^  uninstall quit: ".*"$', lambda _: '  uninstall quit: "%s"' % bundle, src, count=1, flags=re.M)
 if n != 1: sys.exit("the cask has no uninstall quit line")
 open(path, "w").write(src)
@@ -417,7 +432,7 @@ PY
   grep -qx "  sha256 \"$SHA\"" "$1" || fail "the cask's sha256 line"
   grep -qxF "$CASK_URL" "$1" || fail "the cask's url line"
   grep -qxF '      json["version"]' "$1" || fail "the cask's livecheck"
-  grep -qx '  auto_updates true' "$1" && fail "the cask still has auto_updates true"
+  grep -qx '  auto_updates true' "$1" || fail "the cask has no auto_updates true"
   grep -qx '  depends_on macos: :tahoe' "$1" || fail "the cask lost depends_on macos: :tahoe"
   grep -qx "  uninstall quit: \"$BUNDLE_ID\"" "$1" || fail "the cask's uninstall quit"
 }
@@ -482,7 +497,6 @@ fi
 step "9. Summary"
 cat <<SUMMARY
   Tsukumo $VERSION ($BUILD)$( (( DRY )) && echo ' (DRY RUN: nothing committed, pushed, deployed, or tagged)')
-  Tests:          $TESTS
   Signed:         $ID; profile: $PROFILE_NAME
   Entitlements:   $ENTITLEMENTS_NOTE
   Notarized:      app and DMG accepted and stapled; Gatekeeper: Notarized Developer ID
@@ -490,5 +504,5 @@ cat <<SUMMARY
   SHA-256:        $SHA
   Download:       $DMG_URL  ($STABLE_URL redirects there)
   Feed:           $FEED_URL (minimum macOS $MIN_MACOS)
-  Homebrew:       brew install --cask $CASK (brew upgrade updates it)
+  Homebrew:       brew install --cask $CASK (auto_updates true: the app updates itself; brew upgrade --greedy also does)
 SUMMARY

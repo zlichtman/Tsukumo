@@ -94,7 +94,7 @@ final class DockHoverView: NSView {
     // MARK: Layout
 
     private var screen: NSRect { (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame ?? .init(x: 0, y: 0, width: 1440, height: 900) }
-    public var layout: DockLayout { DockLayout(settings: dock.settings, tiles: dock.bots.count + 2, screen: screen) }
+    public var layout: DockLayout { DockLayout(settings: dock.settings, tiles: dock.bots.count + DockShelfView.extraTiles, screen: screen) }
     var reduceMotion: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
     private func makePanels() {
@@ -119,7 +119,7 @@ final class DockHoverView: NSView {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 switch self.dock.surface {
-                case .edit?: return
+                case .panel?: return
                 default: self.dock.open(nil)
                 }
             }
@@ -155,7 +155,7 @@ final class DockHoverView: NSView {
         let delay = dock.settings.autohideDelay
         collapse = Task { [weak self] in
             if !now { try? await Task.sleep(for: .seconds(delay)) }
-            guard let self, !Task.isCancelled, self.dock.surface == nil, self.dock.callout == nil,
+            guard let self, !Task.isCancelled, self.dock.surface == nil, self.dock.callout == nil, self.dock.voiceBubble == nil,
                   now || !(self.shelfPanel?.frame.contains(NSEvent.mouseLocation) ?? false) else { return }
             withAnimation(self.reduceMotion ? nil : .easeIn(duration: 0.18)) { self.revealed = false }
             try? await Task.sleep(for: .milliseconds(self.reduceMotion ? 0 : 200))
@@ -170,9 +170,8 @@ final class DockHoverView: NSView {
     }
     private func index(of surface: DockSurface) -> Int {
         switch surface {
-        case .bot(let id): dock.bots.firstIndex { $0.id == id } ?? 0
-        case .edit(let id?): dock.bots.firstIndex { $0.id == id } ?? dock.bots.count
-        case .edit(nil): dock.bots.count
+        case .bot(let id), .panel(let id): dock.bots.firstIndex { $0.id == id } ?? 0
+        case .addBot: dock.bots.count
         case .together: dock.bots.count + 1
         }
     }
@@ -180,8 +179,10 @@ final class DockHoverView: NSView {
         guard let bubblePanel, let surface = dock.surface else { return }
         bubblePanel.setFrame(layout.bubbleFrame(forTile: index(of: surface), size: DockMetrics.size(for: surface)), display: true)
     }
+    /// The bot whose speech bubble shows: one listening (or just done), or one chirping or finished.
+    private var calloutBot: UUID? { dock.voiceBubble?.botID ?? dock.callout?.bot }
     private func placeCallout() {
-        guard let calloutPanel, let callout = dock.callout, let index = dock.bots.firstIndex(where: { $0.id == callout.bot }) else { return }
+        guard let calloutPanel, let bot = calloutBot, let index = dock.bots.firstIndex(where: { $0.id == bot }) else { return }
         calloutPanel.setFrame(layout.calloutFrame(forTile: index, size: DockMetrics.callout), display: true)
     }
 
@@ -189,6 +190,7 @@ final class DockHoverView: NSView {
     private func observe() {
         withObservationTracking {
             _ = dock.surface; _ = dock.callout; _ = dock.bots.count; _ = dock.settings
+            _ = dock.voice?.listener; _ = dock.voice?.lastListener
         } onChange: { [weak self] in
             Task { @MainActor in self?.changed() }
         }
@@ -209,7 +211,9 @@ final class DockHoverView: NSView {
             bubblePanel?.orderOut(nil)
             if !(shelfPanel?.frame.contains(NSEvent.mouseLocation) ?? false) { tuck() }
         }
-        if let callout = dock.callout, dock.surface == nil || !dock.isShowing(callout.bot) {
+        if let listening = dock.voiceBubble, let bot = listening.botID, dock.surface != .bot(bot) {
+            reveal(); placeCallout(); calloutPanel?.orderFrontRegardless()
+        } else if let callout = dock.callout, dock.surface == nil || !dock.isShowing(callout.bot) {
             reveal(); placeCallout(); calloutPanel?.orderFrontRegardless()
         } else {
             calloutPanel?.orderOut(nil)
@@ -266,7 +270,12 @@ private struct DockCalloutRoot: View {
     let controller: BotDockController
     var body: some View {
         let dock = controller.dock
-        if let callout = dock.callout, let bot = dock.bot(callout.bot) {
+        if let listening = dock.voiceBubble, let bot = dock.bot(listening.botID) {
+            let left = dock.settings.edge == .left
+            DockListeningBubble(bot: bot, listener: listening, tailOnLeft: left) { dock.open(.bot(bot.id)) }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: left ? .topLeading : .topTrailing)
+                .transition(.opacity)
+        } else if let callout = dock.callout, let bot = dock.bot(callout.bot) {
             let left = dock.settings.edge == .left
             DockCalloutBubble(bot: bot, text: callout.text, tailOnLeft: left)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: left ? .topLeading : .topTrailing)

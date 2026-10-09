@@ -88,6 +88,8 @@ public enum Routing {
     /// Bots named with "@Name", in `bots` order. Case doesn't matter; a name with spaces may be
     /// written without them, or by its first word when no other bot's name starts with that word;
     /// KemoSabe also answers to "@kemosabe" whatever it's called. "@Pip," counts; "@Pipe" doesn't.
+    /// Without the "@", a name counts when the message starts with it ("Leafy, can you…") or right after
+    /// ask, tell, or hey ("ask Muse about…"), the way people address someone (the owner, October 8, 2026).
     public static func mentions(in text: String, bots: [BotSpec]) -> [UUID] {
         let lowered = text.lowercased()
         func firstWord(_ name: String) -> String { name.split(separator: " ").first.map(String.init) ?? name }
@@ -98,7 +100,7 @@ public enum Routing {
             var forms = [name, name.replacingOccurrences(of: " ", with: "")]
             if bots.filter({ firstWord($0.name.lowercased().trimmingCharacters(in: .whitespaces)) == first }).count == 1 { forms.append(first) }
             if bot.isKemoSabe { forms.append("kemosabe") }
-            if forms.contains(where: { mentioned($0, in: lowered) }) { found.append(bot.id) }
+            if forms.contains(where: { mentioned($0, in: lowered) || addressed($0, in: lowered) }) { found.append(bot.id) }
         }
         return found
     }
@@ -119,6 +121,18 @@ public enum Routing {
     /// Who the message goes to with no System One: the tagged bots, else the fallback.
     public static func recipients(text: String, chips: Set<UUID>, lastSpokenTo: UUID?, bots: [BotSpec]) -> [UUID] {
         decide(text: text, chips: chips, lastSpokenTo: lastSpokenTo, bots: bots).recipients
+    }
+
+    /// The name, without "@", opening the message or right after a word that addresses someone.
+    private static func addressed(_ name: String, in text: String) -> Bool {
+        guard name.count >= 3 else { return false }
+        let words = text.split(whereSeparator: { !($0.isLetter || $0.isNumber || $0 == "'" || $0 == "’") }).map(String.init)
+        let parts = name.split(separator: " ").map(String.init)
+        guard !parts.isEmpty, words.count >= parts.count else { return false }
+        func at(_ index: Int) -> Bool { index + parts.count <= words.count && Array(words[index..<index + parts.count]) == parts }
+        if at(0) { return true }
+        for (index, word) in words.enumerated().dropLast() where ["ask", "tell", "hey", "hi"].contains(word) && at(index + 1) { return true }
+        return false
     }
 
     private static func mentioned(_ name: String, in text: String) -> Bool {

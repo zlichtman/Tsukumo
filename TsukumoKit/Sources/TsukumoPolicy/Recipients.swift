@@ -113,6 +113,7 @@ public enum RecipientID: Hashable, Codable, Sendable, CustomStringConvertible {
         case .codingAgent(let id): .codingAgent(id)
         case .acp(let id): .acpAgent(id)
         case .mlx(let model): .localModel(model)
+        case .service(let id): .externalAgent("service:" + id)
         case .unknown: nil
         }
     }

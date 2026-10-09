@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- The default (TSUKUMO_CAPABILITIES = Local): no capability that needs Apple's developer portal. Calendars
-     is a hardened runtime exception (no portal step), so KemoSabe can read Calendar and Reminders once the
-     owner turns them on in Settings, KemoSabe. Not sandboxed. -->
+<!-- The default (TSUKUMO_CAPABILITIES = Local): no capability that needs Apple's developer portal. Calendars,
+     Contacts, and Photos are hardened runtime exceptions (no portal step), so KemoSabe can read them once the
+     owner turns them on in Settings, KemoSabe. Audio input is the hardened runtime's microphone exception
+     (no portal step either), for talking to a bot. Not sandboxed. -->
 <plist version="1.0">
 <dict>
 	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+	<key>com.apple.security.personal-information.addressbook</key>
+	<true/>
+	<key>com.apple.security.personal-information.photos-library</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
 	<true/>
 </dict>
 </plist>

@@ -3,13 +3,15 @@ import TsukumoCore
 import TsukumoEngines
 import TsukumoPolicy
 import TsukumoUI
+import TsukumoGate
 
 /// The first run on iPhone (TsukumoUI's `OnboardingFlow`) on the app's own parts: the account, API
-/// connections with keys in the Keychain, KemoSabe's Calendar and Reminders, and the bots.
+/// connections with keys in the Keychain (each brings its service's bot), and KemoSabe's everyday sources.
 extension AppModel: OnboardingHost {
     var deviceName: String { "iPhone" }
     var fixtureSignIn: Bool { launch.uiTesting }
     var appleIntelligence: (ready: Bool, text: String) { AppleOnDevice.status }
+    var kemoSabe: BotSpec { saved[0] }
 
     private func provider(_ provider: OnboardingProvider) -> ConnectionRecord.Provider { provider == .claude ? .anthropic : .openAI }
 
@@ -32,30 +34,12 @@ extension AppModel: OnboardingHost {
         try save(connection: ConnectionRecord(connection: connection, provider: kind, models: models), key: key)
     }
 
+    /// The first run offers the everyday few; the whole catalog is in Settings, KemoSabe.
     var onboardingSources: [OnboardingSource] {
-        SourceKind.allCases.map { OnboardingSource(id: $0.rawValue, title: $0.title, symbol: $0.symbol, on: setting($0).on, level: setting($0).level) }
-    }
-    func setSource(_ id: String, on: Bool) async {
-        guard let kind = SourceKind(rawValue: id) else { return }
-        await set(kind, on: on)
-    }
-    func setSource(_ id: String, level: PrivacyLevel) async {
-        guard let kind = SourceKind(rawValue: id) else { return }
-        await set(kind, level: level)
-    }
-
-    func add(starter: StarterBot) -> BotSpec? {
-        let (engine, model) = engine(for: starter)
-        var bot = starter.bot(existing: bots, engine: engine)
-        bot.model = model
-        guard case .success(let valid) = bot.validated(existing: bots) else {
-            // A bot with the starter's name is already here: number it.
-            var rng = SeededGenerator()
-            bot.name = BotNames.next(taken: bots.map(\.name), using: &rng)
-            save(bot: bot)
-            return bot
+        [SourceKind.calendar, .reminders, .contacts].compactMap { sources.entry($0.rawValue) }.map {
+            OnboardingSource(id: $0.id, title: $0.title, symbol: $0.symbol, on: $0.isOn, level: $0.level)
         }
-        save(bot: valid)
-        return valid
     }
+    func setSource(_ id: String, on: Bool) async { await sources.set(id, on: on) }
+    func setSource(_ id: String, level: PrivacyLevel) async { sources.set(id, level: level) }
 }

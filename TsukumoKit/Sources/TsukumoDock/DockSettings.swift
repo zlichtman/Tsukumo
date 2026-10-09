@@ -33,12 +33,6 @@ public enum DockIndicator: String, CaseIterable, Codable, Sendable, Identifiable
     public var id: String { rawValue }
     public var title: String { self == .dot ? "Dot" : self == .ring ? "Ring" : "None" }
 }
-/// Which engine runs each bot.
-public enum DockEngineMark: String, CaseIterable, Codable, Sendable, Identifiable {
-    case ring, logo, none
-    public var id: String { rawValue }
-    public var title: String { self == .ring ? "Color ring" : self == .logo ? "Logo" : "None" }
-}
 /// How much the characters move.
 public enum DockAnimationLevel: String, CaseIterable, Codable, Identifiable, Sendable {
     /// Everything: loops, look-arounds, reactions.
@@ -93,11 +87,23 @@ public struct DockSettings: Codable, Equatable, Sendable {
     public var labels: DockLabelStyle = .glass
     public var indicator: DockIndicator = .dot
     /// A thin ring in the engine's color at a bot's feet (default), its mark, or nothing.
-    public var engineMark: DockEngineMark = .ring
     /// Characters sleep at night (11 pm to 7 am) while they have nothing to do.
     public var sleepAtNight = true
     /// A soft sound when a bot chirps in.
     public var chirpSounds = false
+    /// The shelf's color ("RRGGBB"), or nil for Automatic: the glass as it is, Tsukumo's coral for Tinted
+    /// glass, the window color for Solid. It tints every style: the glass lightly, Tinted glass more, Solid
+    /// fills with it, and in every style (Minimal too) it colors the sliver at the edge and the working
+    /// indicators.
+    public var tint: String?
+    /// The editor a coding bot's project opens in, following each file its agent edits (its bundle ID), or nil for none.
+    public var followEditor: String?
+
+    /// The color row in Settings, Dock, after Automatic.
+    public static let tintSwatches: [(name: String, hex: String)] = [
+        ("Coral", "EF705B"), ("Amber", "E9A23B"), ("Sage", "7FA87A"), ("Teal", "3A9E98"), ("Sky", "4F8FD6"),
+        ("Iris", "7467D4"), ("Rose", "D9668F"), ("Graphite", "5D5B66"), ("Midnight", "23263A")
+    ]
 
     public init() {}
 
@@ -125,12 +131,16 @@ public struct DockSettings: Codable, Equatable, Sendable {
         copy.size = min(Self.sizeRange.upperBound, max(Self.sizeRange.lowerBound, size.rounded()))
         copy.magnifiedSize = min(Self.magnifiedRange.upperBound, max(copy.size + 8, magnifiedSize.rounded()))
         copy.autohideDelay = min(Self.delayRange.upperBound, max(Self.delayRange.lowerBound, autohideDelay))
+        if let tint = copy.tint {
+            let digits = tint.trimmingCharacters(in: CharacterSet(charactersIn: "# ")).uppercased()
+            copy.tint = digits.count == 6 && UInt32(digits, radix: 16) != nil ? digits : nil
+        }
         return copy
     }
 
     private enum CodingKeys: String, CodingKey {
         case edge, position, size, magnification, magnifiedSize, autohide, autohideDelay, animation, style, spacing, corners
-        case separators, labels, indicator, engineMark, sleepAtNight, chirpSounds
+        case separators, labels, indicator, sleepAtNight, chirpSounds, tint, followEditor
     }
     /// Settings saved by a newer build keep loading; anything missing takes its default. (An older file's
     /// "home", where the bots lived, is ignored: the Tsukumo app is always the side dock.)
@@ -152,9 +162,10 @@ public struct DockSettings: Codable, Equatable, Sendable {
         separators = value(.separators, d.separators)
         labels = value(.labels, d.labels)
         indicator = value(.indicator, d.indicator)
-        engineMark = value(.engineMark, d.engineMark)
         sleepAtNight = value(.sleepAtNight, d.sleepAtNight)
         chirpSounds = value(.chirpSounds, d.chirpSounds)
+        tint = (try? c.decodeIfPresent(String.self, forKey: .tint)) ?? nil
+        followEditor = (try? c.decodeIfPresent(String.self, forKey: .followEditor)) ?? nil
         self = clamped()
     }
 }
@@ -165,7 +176,7 @@ public struct DockSettings: Codable, Equatable, Sendable {
 /// coordinates (origin bottom left, as AppKit's). Pure, so each edge and position is tested directly.
 public struct DockLayout: Equatable, Sendable {
     public let settings: DockSettings
-    /// Every tile: the bots, then + and Together.
+    /// Every tile: the bots, then Together and Settings (always last).
     public let tiles: Int
     /// The screen's visible frame.
     public let screen: CGRect
@@ -252,10 +263,11 @@ public struct DockLayout: Equatable, Sendable {
 /// The panels beside the dock.
 public enum DockMetrics {
     public static let bubble = CGSize(width: 400, height: 520)
-    public static let form = CGSize(width: 420, height: 600)
+    public static let panel = CGSize(width: 420, height: 600)
     public static let callout = CGSize(width: 262, height: 80)
     public static func size(for surface: DockSurface?) -> CGSize {
-        if case .edit? = surface { return form }
+        if case .panel? = surface { return panel }
+        if case .addBot? = surface { return panel }
         return bubble
     }
 }

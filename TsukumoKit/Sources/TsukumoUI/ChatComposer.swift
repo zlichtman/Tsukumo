@@ -1,16 +1,25 @@
 import SwiftUI
 import TsukumoCore
+import TsukumoVoice
 
 /// The composer: the message, the bots it goes to (chips you tap, or "@name" in the text), and send.
 /// With nobody tagged, the placeholder names who gets it ("Message Claude…").
 public struct ChatComposer: View {
     @Bindable var session: ChatSession
-    var onCreateBot: () -> Void
     @FocusState private var focused: Bool
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.voice) private var voice
+    /// The bot being held to talk (press and hold its chip); its tap then doesn't tag it.
+    @State private var holding: UUID?
 
-    public init(session: ChatSession, onCreateBot: @escaping () -> Void = {}) {
-        self.session = session; self.onCreateBot = onCreateBot
+    /// A turn of listening for this chat (its microphone, or a chip held), while it's live.
+    private var listening: VoiceListener? {
+        guard let listener = voice?.listener, listener.phase.isLive else { return nil }
+        return listener.botID == nil || session.bot(listener.botID) != nil ? listener : nil
+    }
+
+    public init(session: ChatSession) {
+        self.session = session
     }
 
     public var body: some View {
@@ -35,31 +44,33 @@ public struct ChatComposer: View {
                     .padding(.horizontal, 4)
                 }
             }
+            if let last = voice?.lastListener, case .failed(let message) = last.phase, last.botID == nil || session.bot(last.botID) != nil {
+                Label(message, systemImage: "mic.slash").tsukumoFont(.caption).foregroundStyle(theme.secondary)
+                    .padding(.horizontal, 8)
+                    .accessibilityIdentifier("voiceProblem")
+            }
             VStack(alignment: .leading, spacing: 10) {
-                TextField(session.placeholder, text: $session.draft, axis: .vertical)
-                    .lineLimit(1...6)
-                    .tsukumoFont(.body)
-                    .textFieldStyle(.plain)
-                    .focused($focused)
-                    .submitLabel(.send)
-                    .onSubmit(send)
-                    .padding(.horizontal, 16).padding(.top, 16)
-                    .accessibilityIdentifier("chatInput")
+                if let listening, listening.phase.isLive {
+                    ListeningStrip(listener: listening)
+                        .padding(.horizontal, 16).padding(.top, 14)
+                } else {
+                    TextField(session.placeholder, text: $session.draft, axis: .vertical)
+                        .lineLimit(1...6)
+                        .tsukumoFont(.body)
+                        .textFieldStyle(.plain)
+                        .focused($focused)
+                        .submitLabel(.send)
+                        .onSubmit(send)
+                        .padding(.horizontal, 16).padding(.top, 16)
+                        .accessibilityIdentifier("chatInput")
+                }
                 HStack(spacing: 8) {
-                    Button(action: onCreateBot) {
-                        Image(systemName: "plus").font(.system(size: 17, weight: .medium))
-                            .frame(width: 38, height: 38)
-                            .background(theme.fill, in: Circle())
-                            .overlay(Circle().stroke(theme.hairline))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Make a bot")
-                    .accessibilityIdentifier("composerAddBot")
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(session.threadBots) { bot in chip(bot, theme: theme) }
                         }
                     }
+                    if let voice { ComposerMicButton(session: session, voice: voice) }
                     sendButton(theme)
                 }
                 .padding(.horizontal, 10)
@@ -75,7 +86,10 @@ public struct ChatComposer: View {
 
     private func chip(_ bot: BotSpec, theme: TsukumoTheme) -> some View {
         let on = session.chips.contains(bot.id)
-        return Button { session.toggleChip(bot.id) } label: {
+        return Button {
+            if holding == bot.id { holding = nil; return }
+            session.toggleChip(bot.id)
+        } label: {
             HStack(spacing: 6) {
                 BotAvatar(bot: bot, size: 20, showsEngine: false)
                 Text(bot.name).tsukumoFont(.subheadline, weight: .medium).lineLimit(1)
@@ -85,10 +99,29 @@ public struct ChatComposer: View {
             .overlay(Capsule().stroke(on ? theme.accent.opacity(0.55) : theme.hairline))
         }
         .buttonStyle(.plain)
+        .onLongPressGesture(minimumDuration: VoiceGestures.holdThreshold, perform: { hold(bot) }, onPressingChanged: { pressing in
+            // Letting go of a held chip sends what was said.
+            guard !pressing, holding == bot.id, let listener = voice?.listener, listener.botID == bot.id else { return }
+            listener.stop()
+            Task { try? await Task.sleep(for: .milliseconds(400)); if holding == bot.id { holding = nil } }
+        })
         .accessibilityLabel(bot.name)
         .accessibilityValue(on ? "Tagged" : "Not tagged")
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityHint(voice == nil ? "" : "Touch and hold to talk to \(bot.name).")
+        .accessibilityAction(named: "Talk to \(bot.name)") { hold(bot); voice?.listener?.setHold(false) }
         .accessibilityIdentifier("chip-" + bot.name)
+    }
+
+    /// Press and hold a bot's chip to talk to it: it listens while you hold and sends when you let go (or,
+    /// if you let go at once, when you stop talking).
+    private func hold(_ bot: BotSpec) {
+        guard let voice else { return }
+        focused = false
+        holding = bot.id
+        voice.listen(to: bot.id, hold: true, names: session.bots.map(\.name)) { text in
+            Task { await session.say(text, to: bot.id) }
+        }
     }
 
     private func sendButton(_ theme: TsukumoTheme) -> some View {

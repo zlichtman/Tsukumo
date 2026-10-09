@@ -17,6 +17,15 @@ import TsukumoPolicy
 // - Deleting a bot or a chat sends a tombstone, so it goes away on every device.
 // - The default model and API connections sync without keys. Keys, KemoSabe's grants and journal, and
 //   personal sources are never in the library at all.
+// - The lineup (October 7, 2026): bots and chats the lineup migration retired (`LineupAliases`) are aliases, not
+//   deletions. The aliases sync too (`setting:lineupAliases`, only ever growing), so every device shares the same
+//   old-to-new mappings: no device sends a tombstone for a retired ID, and one arriving from a device that hasn't
+//   migrated its own library yet is mapped onto what it became (a folded bot's messages onto its service bot, a
+//   merged chat onto the chat it lives on in), never added back as a custom bot. The library carries a schema version
+//   (`setting:schema`): a device that has ever seen a newer schema than its own remembers it in its ledger
+//   (`SyncLedger.newerSchema`) and applies nothing destructive (no tombstones) until it's updated.
+// - No released build has had iCloud on (every release is `TSUKUMO_CAPABILITIES = Local`), so no older shipped client
+//   has ever synced: the first build that turns iCloud on is the baseline this format must stay compatible with.
 
 /// Everything that syncs, as one device has it.
 public struct SyncLibrary: Equatable, Sendable {
@@ -24,9 +33,13 @@ public struct SyncLibrary: Equatable, Sendable {
     public var threads: [ChatThread]
     public var defaultModel: DefaultModel?
     public var connections: [APIConnectionRecord]
+    /// What the lineup migration retired, on this device or another (synced as `setting:lineupAliases`; it also shapes
+    /// what's sent and taken).
+    public var aliases: LineupAliases
 
-    public init(bots: [BotSpec] = [], threads: [ChatThread] = [], defaultModel: DefaultModel? = nil, connections: [APIConnectionRecord] = []) {
-        self.bots = bots; self.threads = threads; self.defaultModel = defaultModel; self.connections = connections
+    public init(bots: [BotSpec] = [], threads: [ChatThread] = [], defaultModel: DefaultModel? = nil, connections: [APIConnectionRecord] = [],
+                aliases: LineupAliases = LineupAliases()) {
+        self.bots = bots; self.threads = threads; self.defaultModel = defaultModel; self.connections = connections; self.aliases = aliases
     }
 }
 
@@ -43,6 +56,9 @@ public struct SyncLedger: Codable, Equatable, Sendable {
     public var device: String
     /// The iCloud user this library first synced with.
     public var iCloudUser: String?
+    /// The newest schema another device has sent, when it's newer than this build's: until this build is updated,
+    /// nothing destructive (a tombstone) is applied.
+    public var newerSchema: Int?
 
     public init(device: String) { self.device = device }
 }
@@ -51,6 +67,17 @@ public struct SyncLedger: Codable, Equatable, Sendable {
 /// and the tests run the same code.
 public enum LibraryMapping {
     public static let defaultModelID = "setting:defaultModel"
+    /// The library's schema: 2 since the lineup (retired IDs are aliases). Sent as its own setting.
+    public static let schemaID = "setting:schema"
+    public static let schemaVersion = 2
+    /// The lineup migration's aliases, as one setting every device merges into its own.
+    public static let aliasesID = "setting:lineupAliases"
+
+    /// The items a retired ID would be sent as: never tombstoned.
+    static func retiredItems(_ aliases: LineupAliases) -> Set<String> {
+        Set(aliases.bots.keys.map { "bot:" + $0.uuidString } + aliases.retiredBots.map { "bot:" + $0.uuidString }
+            + aliases.chats.keys.map { "thread:" + $0.uuidString })
+    }
 
     /// The items to send: everything that changed since the ledger last saw it, and a tombstone for
     /// everything the ledger knows that's gone (or became Device only). Updates the ledger.
@@ -76,10 +103,17 @@ public enum LibraryMapping {
         for connection in library.connections {
             if let item = try? SyncItem.connection(connection, modified: now) { consider(item) }
         }
+        if let payload = try? JSONEncoder().encode(["version": schemaVersion]) {
+            consider(SyncItem(id: schemaID, type: .setting, label: TypeLabel(kind: "setting", level: .open), modified: now, payload: payload))
+        }
+        if !library.aliases.isEmpty, let payload = try? aliasEncoder.encode(library.aliases) {
+            consider(SyncItem(id: aliasesID, type: .setting, label: TypeLabel(kind: "setting", level: .personal), modified: now, payload: payload))
+        }
+        let retired = retiredItems(library.aliases)
         for (id, entry) in ledger.entries.sorted(by: { $0.key < $1.key }) where !entry.deleted && !present.contains(id) {
-            // KemoSabe is never deleted anywhere.
-            if id == "bot:" + BotSpec.kemoSabeID.uuidString { continue }
-            guard let type = syncType(of: id) else { continue }
+            // KemoSabe is never deleted anywhere, and what the lineup retired is an alias, not a deletion.
+            if id == "bot:" + BotSpec.kemoSabeID.uuidString || retired.contains(id) { continue }
+            guard ledger.newerSchema == nil, let type = syncType(of: id) else { continue }
             ledger.entries[id] = .init(hash: entry.hash, modified: now, deleted: true)
             items.append(SyncItem(id: id, type: type, label: TypeLabel(kind: "tombstone", level: .open), modified: now, deleted: true, payload: Data()))
         }
@@ -89,13 +123,48 @@ public enum LibraryMapping {
     /// The library after what arrived from other devices, and the ledger updated to match it.
     public static func merge(_ received: [SyncItem], into library: SyncLibrary, ledger: inout SyncLedger) -> SyncLibrary {
         var next = library
+        // Another device's aliases first (they only grow), so this batch's items are read through all of them.
+        for item in received where item.id == aliasesID && !item.deleted {
+            if let theirs = try? JSONDecoder().decode(LineupAliases.self, from: item.payload) { next.aliases.add(theirs) }
+        }
+        let aliases = next.aliases
+        let retired = retiredItems(aliases)
+        // A device on a newer schema may mean something this one doesn't by a deletion: remembered in the ledger, so
+        // this device takes nothing destructive from then on, until it's updated.
+        for item in received where item.id == schemaID && !item.deleted {
+            let version = (try? JSONDecoder().decode([String: Int].self, from: item.payload))?["version"] ?? 0
+            if version > schemaVersion { ledger.newerSchema = max(ledger.newerSchema ?? 0, version) }
+        }
+        if let seen = ledger.newerSchema, seen <= schemaVersion { ledger.newerSchema = nil }
+        let newer = ledger.newerSchema != nil
+        // This device's own chats are read through them too: a chat another device merged into one it lives on in
+        // joins it here as well, so the old copy never stays beside it (or comes back after the merged chat is deleted).
+        // Deleted means already in the ledger, or deleted by this batch's last word on it (applied below), so an old copy
+        // is never joined into a chat that's about to go.
+        var deletedThreads = Set(ledger.entries.compactMap { $0.value.deleted ? uuid($0.key, "thread:") : nil })
+        if !newer {
+            var last: [String: SyncItem] = [:]
+            for item in received where item.type == .thread && !retired.contains(item.id) {
+                if let known = ledger.entries[item.id], known.modified > item.modified { continue }
+                if let seen = last[item.id], seen.modified > item.modified { continue }
+                last[item.id] = item
+            }
+            for (id, item) in last {
+                guard let thread = uuid(id, "thread:") else { continue }
+                if item.deleted { deletedThreads.insert(thread) } else { deletedThreads.remove(thread) }
+            }
+        }
+        next.threads = canonical(next.threads, aliases: aliases, deleted: deletedThreads)
         for item in received.sorted(by: { $0.modified < $1.modified }) {
             if let known = ledger.entries[item.id], known.modified > item.modified { continue }
+            if item.deleted && (newer || retired.contains(item.id) || item.id == aliasesID) { continue }
             ledger.entries[item.id] = .init(hash: item.deleted ? (ledger.entries[item.id]?.hash ?? "") : digest(item.payload),
                                             modified: item.modified, deleted: item.deleted)
             switch item.type {
             case .bot:
                 guard let id = uuid(item.id, "bot:") else { continue }
+                // A bot the lineup retired, from a device that hasn't moved yet: it already lives on as its service bot.
+                if aliases.retires(bot: id) { continue }
                 if item.deleted {
                     if id != BotSpec.kemoSabeID { next.bots.removeAll { $0.id == id } }
                     continue
@@ -110,11 +179,27 @@ public enum LibraryMapping {
                     next.threads.removeAll { $0.id == id && $0.privacy.canLeaveDevice }
                     continue
                 }
-                guard let thread = try? TsukumoJSON.decoder.decode(ChatThread.self, from: item.payload), thread.id == id else { continue }
-                if let index = next.threads.firstIndex(where: { $0.id == id }) {
+                guard var thread = try? TsukumoJSON.decoder.decode(ChatThread.self, from: item.payload), thread.id == id else { continue }
+                // A chat from a device that hasn't moved yet: its retired bots' messages go to what they became, and a
+                // merged chat joins the chat it lives on in.
+                thread = aliases.rewrite(thread)
+                let target = thread.id
+                if let index = next.threads.firstIndex(where: { $0.id == target }) {
                     guard next.threads[index].privacy.canLeaveDevice else { continue }
-                    next.threads[index] = merged(local: next.threads[index], remote: thread)
+                    if target == id {
+                        next.threads[index] = merged(local: next.threads[index], remote: thread)
+                    } else {
+                        // An old chat joining the one it was merged into: its messages only; the surviving chat keeps its own
+                        // title, bots, and who was last spoken to (and, as every merge, the stricter privacy).
+                        var joined = merged(local: next.threads[index], remote: thread)
+                        joined.title = next.threads[index].title
+                        joined.botIDs = next.threads[index].botIDs
+                        joined.lastSpokenTo = next.threads[index].lastSpokenTo
+                        next.threads[index] = joined
+                    }
                 } else {
+                    // An old chat never recreates the chat it was merged into once that was deleted.
+                    if target != id, ledger.entries["thread:" + target.uuidString]?.deleted == true { continue }
                     next.threads.append(thread)
                 }
             case .setting:
@@ -132,13 +217,54 @@ public enum LibraryMapping {
         return next
     }
 
+    /// A device's chats read through the aliases: retired bots become what they became, and chats merged into another
+    /// join it. The chat that was merged into keeps its title, bots, and who was last spoken to; every message of both
+    /// stays (the surviving chat's copy of a message wins), and the joined chat is as private as the stricter of the two.
+    /// A chat whose target this device already saw deleted (`deleted`) is never brought back by joining it: an old copy
+    /// that may leave the device goes with it. A Device only chat is never joined at all.
+    public static func canonical(_ threads: [ChatThread], aliases: LineupAliases, deleted: Set<UUID> = []) -> [ChatThread] {
+        var result: [ChatThread] = []
+        for original in threads {
+            var thread = aliases.rewrite(original)
+            // A chat that never leaves this device is never renamed or joined: another device's merge can't have meant
+            // it, and it keeps its own ID whatever happens to the chat it would join. Its retired bots still map.
+            if !original.privacy.canLeaveDevice {
+                thread.id = original.id
+                result.append(thread)
+                continue
+            }
+            if thread.id != original.id, deleted.contains(thread.id) { continue }
+            guard let index = result.firstIndex(where: { $0.id == thread.id }) else { result.append(thread); continue }
+            // The survivor is the chat that already had this ID; between two old chats, the first.
+            let survivorFirst = original.id != thread.id
+            let survivor = survivorFirst ? result[index] : thread
+            let joining = survivorFirst ? thread : result[index]
+            var joined = survivor
+            // Both copies are this device's, but one may have come back through sync with KemoSabe's answers redacted:
+            // for each message, the copy that still holds more of its answer cards wins.
+            var byID: [UUID: Message] = [:]
+            for message in joining.messages { byID[message.id] = message }
+            for message in survivor.messages {
+                if let other = byID[message.id], answerContent(other) > answerContent(message) { continue }
+                byID[message.id] = message
+            }
+            joined.messages = byID.values.sorted { $0.date == $1.date ? $0.id.uuidString < $1.id.uuidString : $0.date < $1.date }
+            joined.privacy = max(survivor.privacy, joining.privacy)
+            if joined.title.isEmpty { joined.title = joining.title }
+            result[index] = joined
+        }
+        return result
+    }
+
     /// One chat from two devices, the newer edit (`remote`, which only merges when it's newer) giving
     /// the title, bots' order, and who was last spoken to, and every message from both: this device's
     /// copy of a message wins, so its own unredacted cards stay, and all of them in time order. Both
-    /// devices come to the same chat, so a merge never bounces back and forth.
+    /// devices come to the same chat, so a merge never bounces back and forth. Its privacy is the stricter of the two:
+    /// sync only ever raises a chat's level, so a message never reaches a model its level kept it from on another
+    /// device (lowering a chat's level is done on each device).
     public static func merged(local: ChatThread, remote: ChatThread) -> ChatThread {
         var thread = remote
-        thread.privacy = local.privacy
+        thread.privacy = max(local.privacy, remote.privacy)
         var byID: [UUID: Message] = [:]
         for message in remote.messages { byID[message.id] = message }
         for message in local.messages { byID[message.id] = message }
@@ -147,6 +273,14 @@ public enum LibraryMapping {
         if thread.title.isEmpty { thread.title = local.title }
         if thread.lastSpokenTo == nil { thread.lastSpokenTo = local.lastSpokenTo }
         return thread
+    }
+
+    /// How much of KemoSabe's answers a message holds: what was shared and where the answer is, per card.
+    static func answerContent(_ message: Message) -> Int {
+        message.parts.reduce(0) { count, part in
+            guard case .gateAnswer(let card) = part else { return count }
+            return count + (card.shared == nil ? 0 : 1) + (card.answer == nil ? 0 : 1)
+        }
     }
 
     /// A chat as it may leave this device: KemoSabe's answer cards keep who asked, the question, the
@@ -166,6 +300,7 @@ public enum LibraryMapping {
         return copy
     }
 
+    static var aliasEncoder: JSONEncoder { let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]; return encoder }
     static func digest(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
     static func uuid(_ id: String, _ prefix: String) -> UUID? { id.hasPrefix(prefix) ? UUID(uuidString: String(id.dropFirst(prefix.count))) : nil }
     static func syncType(of id: String) -> SyncType? {
@@ -221,10 +356,23 @@ public enum CloudSyncState: Equatable, Sendable {
         case .waitingForCapability: "Your bots and chats stay on this device until this build of Tsukumo can use iCloud."
         case .iCloudSignedOut: "Sign in to iCloud on this device, then come back."
         case .syncing: "Bringing your bots and chats up to date."
-        case .upToDate(let date): "Up to date as of " + date.formatted(date: .omitted, time: .shortened) + ". Keys, KemoSabe’s answers, and chats kept on this device never sync."
+        case .upToDate: "Your bots and chats are up to date here."
         case .failed(let reason): reason
         }
     }
+    /// The account page's pill: "Syncing with iCloud", "Waiting for iCloud", "Paused", "Off".
+    public var short: String {
+        switch self {
+        case .noAccount, .iCloudSignedOut: "Off"
+        case .waitingForCapability: "Waiting for iCloud"
+        case .syncing, .upToDate: "Syncing with iCloud"
+        case .failed: "Paused"
+        }
+    }
+    /// When it last finished.
+    public var lastSynced: Date? { if case .upToDate(let date) = self { date } else { nil } }
+    /// Waiting on something outside Tsukumo (the capability, or iCloud on this device).
+    public var isWaiting: Bool { self == .waitingForCapability || self == .iCloudSignedOut }
     public var isOn: Bool {
         switch self {
         case .syncing, .upToDate: true
@@ -245,6 +393,8 @@ public enum CloudSyncState: Equatable, Sendable {
     @ObservationIgnored private var running = false
     @ObservationIgnored private var again = false
     @ObservationIgnored private var pending: Task<Void, Never>?
+    /// The host pauses sync until its persisted library has recovered.
+    @ObservationIgnored public var canSync: @MainActor () -> Bool = { true }
     @ObservationIgnored public var clock: () -> Date = Date.init
     @ObservationIgnored public static let zone = "Tsukumo"
 
@@ -280,7 +430,7 @@ public enum CloudSyncState: Equatable, Sendable {
 
     /// Pushes what changed here, pulls what changed elsewhere, and applies it.
     public func syncNow() async {
-        guard let database, state != .noAccount else { return }
+        guard canSync(), let database, state != .noAccount else { return }
         if running { again = true; return }
         running = true
         defer { running = false }
@@ -320,7 +470,7 @@ public enum CloudSyncState: Equatable, Sendable {
             } catch {
                 state = .failed("Couldn’t reach iCloud. Sync will try again.")
             }
-        } while again
+        } while again && canSync()
     }
 
     private func save() {

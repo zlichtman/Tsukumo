@@ -1,0 +1,8 @@
+# Tsukumo's Dock 2.03 (build 203)
+
+October 4, 2026. Coding bots run on the coding agent already on this Mac, on the owner's own sign-in: Claude Code, Codex, and agents that speak ACP (Cursor Agent, Gemini CLI). A new bot's AI model step lists the agents found here with their models and efforts; each bot's access decides first (read only by default) and anything left to ask shows in the chat with Allow and Don't allow; each chat continues its agent's session; the agent's own events drive the tile's work cue; and Settings, Dock has "Follow their edits in" (Nowhere, Xcode, Cursor, VS Code, Zed). iCloud and Sign in with Apple stay off in this build (`TSUKUMO_CAPABILITIES=Local`).
+
+- **Where:** the owner's website only: `https://zlichtman.com/downloads/Tsukumo-Dock-2.03.dmg`, with `/downloads/Tsukumo.dmg` and the old 2.00, 2.01, and 2.02 links redirecting to it. 2.02 was taken down. Homebrew wasn't updated; the `tsukumo` cask stays disabled.
+- **DMG:** 21,616,973 bytes, SHA-256 `7af2188382ec5cd89c2bbfec645f767679c9b62e4961c4773f2da99938f5b3f7`, notarized (app: 4b3c1a29-fa7a-4ca7-b507-1e7d310bcb1b, DMG: 4d0ea0d0-fd3b-47c3-8417-6e4b2cb48137), stapled, accepted by Gatekeeper as Notarized Developer ID.
+- **How:** `scripts/release-mac.sh 203 --dry-run` built, tested (344 TsukumoKit tests), notarized, and checked it; the DMG was placed on the site by hand, since the script's publish step also updates Homebrew.
+- **Not checked live:** a full Claude Code or Cursor Agent turn (their sign-ins on this Mac had expired during the smoke runs; Codex finished one). DEVELOPMENT.md, known issue 4.

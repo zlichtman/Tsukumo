@@ -1,5 +1,7 @@
 import Foundation
 import TsukumoCore
+import TsukumoEngines
+import TsukumoPolicy
 
 // The seams between the chat and the modules that run it. Each is a small protocol, so the chat can be
 // tested with stand-ins, and each module plugs in through one adapter (KitAdapters.swift): TsukumoEngines'
@@ -20,10 +22,18 @@ public struct BotTurn: Sendable {
     /// The `ask_kemosabe` tool: asks KemoSabe a question about the owner, with why. Returns exactly
     /// what KemoSabe shared, or nil when it shared nothing (the card in the chat says why).
     public let askKemoSabe: @Sendable (_ question: String, _ purpose: String) async -> String?
+    /// Asks the owner about something a coding agent wants to do that the bot's access leaves to them
+    /// ("Edit Sources/App.swift"): true allows it. Nil answers no.
+    public let approve: (@Sendable (ApprovalRequest) async -> Bool)?
+    /// A task from an outside caller (Muse): no history, no saved engine session, no references, and no tools,
+    /// so the bot works only from what the caller sent. Coding agents never run isolated turns.
+    public let isolated: Bool
 
     public init(bot: BotSpec, message: Message, thread: ChatThread, bots: [BotSpec],
+                approve: (@Sendable (ApprovalRequest) async -> Bool)? = nil, isolated: Bool = false,
                 askKemoSabe: @escaping @Sendable (_ question: String, _ purpose: String) async -> String?) {
-        self.bot = bot; self.message = message; self.thread = thread; self.bots = bots; self.askKemoSabe = askKemoSabe
+        self.bot = bot; self.message = message; self.thread = thread; self.bots = bots; self.approve = approve; self.isolated = isolated
+        self.askKemoSabe = askKemoSabe
     }
 }
 
@@ -33,6 +43,8 @@ public enum BotTurnEvent: Sendable, Equatable {
     case text(String)
     /// A line about the bot itself ("Claude isn't connected").
     case status(String)
+    /// What a coding agent is doing (the dock's work cues follow it).
+    case activity(CodingActivity)
 }
 
 /// Runs bots' turns. TsukumoEngines' `Engine.run(_:)` plugs in here.
@@ -84,6 +96,46 @@ public protocol KemoSabeAnswering: Sendable {
     var device: String { get }
     func ask(_ question: KemoSabeQuestion, consent: @escaping @Sendable () async -> ConsentChoice,
              share: @escaping @Sendable (SharePrompt) async -> Bool) async -> GateAnswerCard
+    /// A question from a caller outside the owner's bots (Muse, through Tsukumo's Dock as a Muse gadget), as
+    /// its own recipient with its own consent. No bot's limits apply; KemoSabe's own do.
+    func ask(caller: KemoSabeCaller, exchange: GateExchangeID, question: String, purpose: String,
+             consent: @escaping @Sendable () async -> ConsentChoice, share: @escaping @Sendable (SharePrompt) async -> Bool) async -> GateAnswerCard
+    /// A bot's reply to an outside caller's task, released to that caller only through KemoSabe: its consent
+    /// (asked the first time), sealed for it, and journaled. `question` is what the card asks the owner.
+    func release(_ text: String, source: String, to caller: KemoSabeCaller, exchange: GateExchangeID, question: String, purpose: String,
+                 consent: @escaping @Sendable () async -> ConsentChoice) async -> GateAnswerCard
+    /// Ends an exchange's wait at KemoSabe at once (its prompt or card comes down), deciding nothing: the chat
+    /// was stopped, or the card's wait arrived after its exchange ended.
+    @MainActor func withdraw(_ exchange: GateExchangeID)
+    /// An answer KemoSabe handed over that the chat then dropped (its asker stopped): it was never delivered, so
+    /// the journal mustn't say it was shared, and its stored copy goes.
+    @MainActor func undelivered(_ exchange: GateExchangeID)
+}
+
+/// An agent that isn't one of the owner's bots, asking KemoSabe through Tsukumo ("Muse"). It's its own
+/// recipient, so the owner's consent for it is its own, and it never borrows a bot's.
+public struct KemoSabeCaller: Sendable, Hashable {
+    public let requester: RecipientID
+    /// "Muse", or "Muse, through Claude" for a bot's turn Muse asked for.
+    public let name: String
+    public init(requester: RecipientID, name: String) { self.requester = requester; self.name = name }
+}
+
+extension KemoSabeAnswering {
+    /// Without a Gate behind it, KemoSabe answers no caller.
+    public func ask(caller: KemoSabeCaller, exchange: GateExchangeID, question: String, purpose: String,
+                    consent: @escaping @Sendable () async -> ConsentChoice, share: @escaping @Sendable (SharePrompt) async -> Bool) async -> GateAnswerCard {
+        GateAnswerCard(exchange: exchange, askerName: caller.name, question: question, outcome: .unavailable, device: device)
+    }
+    /// Without a Gate behind it, nothing waits there.
+    @MainActor public func withdraw(_ exchange: GateExchangeID) {}
+    @MainActor public func undelivered(_ exchange: GateExchangeID) {}
+
+    /// Without a Gate behind it, nothing is released.
+    public func release(_ text: String, source: String, to caller: KemoSabeCaller, exchange: GateExchangeID, question: String, purpose: String,
+                        consent: @escaping @Sendable () async -> ConsentChoice) async -> GateAnswerCard {
+        GateAnswerCard(exchange: exchange, askerName: caller.name, question: question, outcome: .unavailable, device: device)
+    }
 }
 
 // MARK: Routing an untagged message (TsukumoSystemOne)

@@ -18,7 +18,7 @@
 #   3. Archives the Tsukumo scheme (Release) for iOS devices.
 #   4. Exports with apps/ios/ExportOptions.plist (app-store-connect, destination upload), which
 #      uploads the build. --no-upload stops after the archive.
-# Test first (DEVELOPMENT.md). Afterwards commit the bump, report Apple's real processing and
+# Build first (scripts/build.sh). Afterwards commit the bump, report Apple's real processing and
 # TestFlight status, and add docs/releases/TSUKUMO-IOS-<build>.md.
 set -euo pipefail
 

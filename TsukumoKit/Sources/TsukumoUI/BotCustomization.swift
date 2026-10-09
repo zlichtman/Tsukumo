@@ -1,294 +1,29 @@
 import SwiftUI
 import TsukumoCore
+import TsukumoVoice
 
-// The pieces both bot editors share (the iPhone's `BotEditor` and the Mac dock's `DockBotForm`), so a bot
-// is customized the same way everywhere: a live preview, then rows of options drawn as the character
-// itself (its body, eyes, expression, topper, accessory, and prop), swatches for its colors, and
-// KemoSabe's one setting, its color.
-
-/// A bot's character, live, as its editor shows it: the clay character at its dock size over its ring.
-public struct BotLookPreview: View {
-    public let look: BotLook
-    public var engine: EngineID?
-    public var side: CGFloat
-    public var animated: Bool
-    @Environment(\.colorScheme) private var scheme
-
-    public init(look: BotLook, engine: EngineID? = nil, side: CGFloat = 132, animated: Bool = true) {
-        self.look = look; self.engine = engine; self.side = side; self.animated = animated
-    }
-
-    public var body: some View {
-        ZStack {
-            Circle().fill(BotPalette.named(look.palette).backgroundRGB.color.opacity(scheme == .dark ? 0.6 : 0.12))
-            if let ring = look.ringColor(engineHex: engine.map(EngineColor.hex) ?? EngineColor.hex(.unknown(""))) {
-                Ellipse().strokeBorder(ring.opacity(0.85), lineWidth: max(1.5, side * 0.03))
-                    .frame(width: side * 0.56, height: side * 0.15).offset(y: side * 0.36)
-            }
-            ClayCharacter(look: look, state: .idle, animated: animated)
-                .frame(width: side * 0.9 * look.scale, height: side * 0.9 * look.scale)
-                .offset(y: side * 0.05 * (1 - look.scale))
-        }
-        .frame(width: side, height: side)
-        .accessibilityElement()
-        .accessibilityLabel("Character preview")
-        .accessibilityValue(Self.describe(look))
-        .accessibilityIdentifier("lookPreview")
-    }
-
-    /// The character in words, for VoiceOver and tests: "Mochi, Lavender, Sparkle eyes, Big grin, Bow tie, Pencil".
-    public static func describe(_ look: BotLook) -> String {
-        var words = [look.shape.title, BotTint.named(hex: look.bodyColor)?.name ?? BotPalette.named(look.palette).name,
-                     look.eyes.title + " eyes", look.expression.title]
-        if look.topper != .none { words.append(look.topper.title) }
-        if look.accessory != .none { words.append(look.accessory.title) }
-        if look.prop != .none { words.append(look.prop.title) }
-        if let accent = BotTint.named(hex: look.accentColor) { words.append(accent.name + " accent") }
-        return words.joined(separator: ", ")
-    }
-}
-
-/// Each engine's color, for the ring at a bot's feet (the dock's `DockEngineColor` reads these).
-public enum EngineColor {
-    public static func hex(_ engine: EngineID) -> String {
-        switch engine {
-        case .appleOnDevice: "EF705B"
-        case .codingAgent("claude-code"): "D97757"
-        case .codingAgent("codex"): "10A37F"
-        case .codingAgent("muse"): "0866FF"
-        case .codingAgent("cursor-agent"): "7A808A"
-        case .api: "D97757"
-        case .mlx: "4B9C8E"
-        default: "8B5CF6"
-        }
-    }
-}
-
-/// One row of choices, each drawn as the character wearing it.
-public struct LookOptionRow<Option: Hashable & Identifiable>: View {
-    let title: String
-    let options: [Option]
-    let selected: Option
-    let label: (Option) -> String
-    let apply: (Option, inout BotLook) -> Void
-    let look: BotLook
-    let identifier: String
-    let choose: (Option) -> Void
-    var tile: CGFloat
-    @Environment(\.colorScheme) private var scheme
-
-    /// `apply` puts an option on a copy of `look` for its tile; `choose` picks it.
-    public init(_ title: String, options: [Option], selected: Option, look: BotLook, identifier: String, tile: CGFloat = 44,
-                label: @escaping (Option) -> String, apply: @escaping (Option, inout BotLook) -> Void, choose: @escaping (Option) -> Void) {
-        self.title = title; self.options = options; self.selected = selected; self.look = look; self.identifier = identifier
-        self.tile = tile; self.label = label; self.apply = apply; self.choose = choose
-    }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.footnote).foregroundStyle(.secondary)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(options) { option in
-                        let on = option == selected
-                        Button { choose(option) } label: {
-                            VStack(spacing: 3) {
-                                ClayCharacter(look: tileLook(option), shadow: false).frame(width: tile, height: tile)
-                                Text(label(option)).font(.caption2).lineLimit(1).foregroundStyle(on ? .primary : .secondary)
-                            }
-                            .frame(width: tile + 18)
-                            .padding(.vertical, 5)
-                            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(on ? TsukumoTheme(scheme).accent.opacity(0.16) : Color.primary.opacity(0.04)))
-                            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(on ? TsukumoTheme(scheme).accent.opacity(0.7) : .clear, lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(label(option))
-                        .accessibilityAddTraits(on ? .isSelected : [])
-                        .accessibilityIdentifier(identifier + "-" + "\(option.id)")
-                    }
-                }
-                .padding(.vertical, 1)
-            }
-        }
-    }
-
-    private func tileLook(_ option: Option) -> BotLook {
-        var copy = look
-        apply(option, &copy)
-        return copy
-    }
-}
-
-/// Named color swatches. With `defaultTitle`, the first swatch is "use the palette's" (nil).
-public struct TintSwatches: View {
-    let title: String
-    @Binding var selection: String?
-    let choices: [BotTint]
-    let defaultTitle: String?
-    /// The color the default swatch shows.
-    let defaultHex: String
-    let identifier: String
-    var size: CGFloat
-
-    public init(_ title: String, selection: Binding<String?>, choices: [BotTint] = BotTint.custom, defaultTitle: String? = "Palette",
-                defaultHex: String, identifier: String, size: CGFloat = 30) {
-        self.title = title; _selection = selection; self.choices = choices; self.defaultTitle = defaultTitle
-        self.defaultHex = defaultHex; self.identifier = identifier; self.size = size
-    }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if !title.isEmpty { Text(title).font(.footnote).foregroundStyle(.secondary) }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: size, maximum: size + 8), spacing: 8)], alignment: .leading, spacing: 8) {
-                if let defaultTitle {
-                    swatch(hex: defaultHex, name: defaultTitle, on: selection == nil, id: "default", dashed: true) { selection = nil }
-                }
-                ForEach(choices) { tint in
-                    swatch(hex: tint.hex, name: tint.name, on: selection == tint.hex || (defaultTitle == nil && selection == nil && tint.hex == defaultHex),
-                           id: tint.id, dashed: false) { selection = tint.hex }
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func swatch(hex: String, name: String, on: Bool, id: String, dashed: Bool, pick: @escaping () -> Void) -> some View {
-        Button(action: pick) {
-            Circle().fill(RGB(hex: hex).color)
-                .frame(width: size, height: size)
-                .overlay(Circle().stroke(Color.primary.opacity(on ? 0.9 : 0.14), style: StrokeStyle(lineWidth: on ? 2.5 : 1, dash: dashed && !on ? [3, 2] : [])))
-                .overlay { if on { Image(systemName: "checkmark").font(.system(size: size * 0.38, weight: .bold)).foregroundStyle(.white.opacity(0.92)).shadow(radius: 1) } }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(name)
-        .accessibilityAddTraits(on ? .isSelected : [])
-        .accessibilityIdentifier(identifier + "-" + id)
-    }
-}
-
-/// The palettes, as swatches.
-public struct PaletteRow: View {
-    @Binding var selection: String
-    public init(selection: Binding<String>) { _selection = selection }
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Palette").font(.footnote).foregroundStyle(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 28, maximum: 34), spacing: 8)], alignment: .leading, spacing: 8) {
-                ForEach(BotPalette.all) { palette in
-                    Button { selection = palette.id } label: {
-                        Circle()
-                            .fill(LinearGradient(colors: [palette.bodyRGB.color, palette.accentRGB.color], startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 28, height: 28)
-                            .overlay(Circle().stroke(Color.primary.opacity(selection == palette.id ? 0.9 : 0.12), lineWidth: selection == palette.id ? 2.5 : 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(palette.name)
-                    .accessibilityAddTraits(selection == palette.id ? .isSelected : [])
-                    .accessibilityIdentifier("palette-" + palette.id)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-/// Everything about a bot's look but its dock size and ring: body, palette, its own colors, eyes,
-/// expression, topper, accessory, prop, and cheeks. Each option is drawn on the character itself.
-public struct LookControls: View {
-    @Binding var look: BotLook
-    var tile: CGFloat
-    public init(look: Binding<BotLook>, tile: CGFloat = 44) { _look = look; self.tile = tile }
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LookOptionRow("Body", options: BotLook.Shape.allCases, selected: look.shape, look: look, identifier: "shape", tile: tile,
-                          label: \.title, apply: { $1.shape = $0; $1.prop = .none }, choose: { look.shape = $0 })
-            PaletteRow(selection: $look.palette)
-            TintSwatches("Body color", selection: $look.bodyColor, defaultHex: BotPalette.named(look.palette).body, identifier: "bodyColor")
-            TintSwatches("Accent color", selection: $look.accentColor, defaultHex: BotPalette.named(look.palette).accent, identifier: "accentColor")
-            LookOptionRow("Eyes", options: BotLook.Eyes.allCases, selected: look.eyes, look: look, identifier: "eyes", tile: tile,
-                          label: \.title, apply: { $1.eyes = $0; $1.prop = .none }, choose: { look.eyes = $0 })
-            LookOptionRow("Expression", options: BotLook.Expression.allCases, selected: look.expression, look: look, identifier: "expression", tile: tile,
-                          label: \.title, apply: { $1.expression = $0; $1.prop = .none }, choose: { look.expression = $0 })
-            LookOptionRow("On its head", options: BotLook.Topper.allCases, selected: look.topper, look: look, identifier: "topper", tile: tile,
-                          label: \.title, apply: { $1.topper = $0; if $1.prop == .hardHat { $1.prop = .none } }, choose: { look.topper = $0; if look.prop == .hardHat { look.prop = .none } })
-            LookOptionRow("Wearing", options: BotLook.Accessory.allCases, selected: look.accessory, look: look, identifier: "accessory", tile: tile,
-                          label: \.title, apply: { $1.accessory = $0 }, choose: { look.accessory = $0 })
-            LookOptionRow("Holding", options: BotLook.Prop.allCases, selected: look.prop, look: look, identifier: "prop", tile: tile,
-                          label: \.title, apply: { $1.prop = $0 }, choose: { look.prop = $0 })
-            Toggle("Rosy cheeks", isOn: $look.blush).accessibilityIdentifier("blush")
-        }
-    }
-}
-
-/// How the bot sits in the Mac's dock: its size and the ring at its feet.
-public struct DockLookControls: View {
-    @Binding var look: BotLook
-    let engine: EngineID
-    public init(look: Binding<BotLook>, engine: EngineID) { _look = look; self.engine = engine }
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Size in the dock")
-                    Spacer()
-                    Text(look.scale < 0.95 ? "Small" : look.scale > 1.08 ? "Large" : "Regular").foregroundStyle(.secondary)
-                }
-                Slider(value: $look.scale, in: BotLook.scaleRange, step: 0.05).accessibilityIdentifier("dockScale")
-            }
-            Picker("Ring", selection: Binding(get: { look.ring }, set: { ring in
-                look.ring = ring
-                if ring == .custom && look.ringColor == nil { look.ringColor = look.accentHex }
-            })) {
-                ForEach(BotLook.Ring.allCases) { Text($0.title).tag($0) }
-            }
-            .accessibilityIdentifier("dockRing")
-            if look.ring == .custom {
-                TintSwatches("Ring color", selection: $look.ringColor, defaultTitle: nil, defaultHex: look.accentHex, identifier: "ringColor")
-            }
-        }
-    }
-}
-
-/// How the bot talks: its tone and the owner's own words.
-public struct PersonalityControls: View {
-    @Binding var personality: BotPersonality
-    public init(personality: Binding<BotPersonality>) { _personality = personality }
-    public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker("Tone", selection: $personality.tone) {
-                ForEach(BotPersonality.Tone.allCases) { Text($0.title).tag($0) }
-            }
-            .accessibilityIdentifier("botTone")
-            Text(personality.tone.detail).font(.footnote).foregroundStyle(.secondary)
-            TextField("Anything else? “Call me Sam. Use metric.”", text: $personality.instructions, axis: .vertical)
-                .lineLimit(2...5)
-                .accessibilityIdentifier("botInstructions")
-            if personality.instructions.count > BotPersonality.maxInstructions {
-                Text("Keep it under \(BotPersonality.maxInstructions) characters.").font(.footnote).foregroundStyle(.orange)
-            }
-        }
-    }
-}
+// KemoSabe's settings, the same on iPhone and Mac: its character (its cloud, or the Finder figure), its companion palette
+// (its cloud, or the figure's two halves, recolored), and its voice. The clay characters' editors (look, personality, dock size and ring) were removed with the
+// fixed lineup (October 7, 2026).
 
 // MARK: KemoSabe
 
-/// KemoSabe's settings: its color, and nothing else to change. It is always its cloud, its name, Apple's
-/// on-device model on this device, and the scope the Gate gives it. `note` says where its privacy
-/// settings live on this device.
+/// KemoSabe's settings: its companion palette, and nothing else to change. It is always its look, its
+/// name, Apple's on-device model on this device, and the scope the Gate gives it. `note` says where its
+/// privacy settings live on this device.
 public struct KemoSabeEditor: View {
     @State private var bot: BotSpec
     let device: String
     let note: String?
+    let more: AnyView?
+    @Environment(\.voice) private var voice
     let onSave: (BotSpec) -> Void
     let onCancel: () -> Void
-    @Environment(\.colorScheme) private var scheme
 
-    public init(bot: BotSpec, device: String, note: String? = nil, onSave: @escaping (BotSpec) -> Void, onCancel: @escaping () -> Void) {
+    public init(bot: BotSpec, device: String, note: String? = nil, more: AnyView? = nil,
+                onSave: @escaping (BotSpec) -> Void, onCancel: @escaping () -> Void) {
         _bot = State(initialValue: bot.normalized())
-        self.device = device; self.note = note; self.onSave = onSave; self.onCancel = onCancel
+        self.device = device; self.note = note; self.more = more; self.onSave = onSave; self.onCancel = onCancel
     }
 
     public var body: some View {
@@ -298,12 +33,26 @@ public struct KemoSabeEditor: View {
                     KemoSabeHeader(bot: bot, device: device)
                 }
                 Section {
-                    KemoSabeColorPicker(bot: $bot)
+                    KemoSabeCharacterPicker(bot: $bot).padding(.vertical, 6)
                 } header: {
-                    Text("Its color")
-                } footer: {
-                    Text("\(bot.name) is always the same: its cloud, its name, and Apple’s on-device model on this \(device). Its color is yours to pick: its card, ring, and buttons in your chats.")
+                    Text("Character")
                 }
+                Section {
+                    KemoSabePalettePicker(bot: $bot, minimum: 72, tileHeight: 76)
+                        .padding(.vertical, 6)
+                } header: {
+                    Text("Palette")
+                } footer: {
+                    Text(KemoSabePalettePicker.footer(name: bot.name, device: device))
+                }
+                Section {
+                    VoicePicker(bot: $bot)
+                } header: {
+                    Text("Voice")
+                } footer: {
+                    Text(VoicePicker.footer(voice: voice, device: device))
+                }
+                if let more { more }
                 if let note {
                     Section { Text(note).font(.footnote).foregroundStyle(.secondary) }
                 }
@@ -323,21 +72,23 @@ public struct KemoSabeEditor: View {
     }
 }
 
-/// KemoSabe's figure in its color, its name, and what it is.
+/// KemoSabe in its palette on the palette's own background, its name, and what it is.
 public struct KemoSabeHeader: View {
     let bot: BotSpec
     let device: String
     var side: CGFloat
-    @Environment(\.colorScheme) private var scheme
     public init(bot: BotSpec, device: String, side: CGFloat = 132) { self.bot = bot; self.device = device; self.side = side }
     public var body: some View {
+        let palette = bot.kemoSabePalette
         VStack(spacing: 8) {
             ZStack {
-                Circle().fill(bot.kemoSabeColor.opacity(scheme == .dark ? 0.22 : 0.12))
+                Circle().fill(LinearGradient(colors: [palette.backgroundRGB.color, palette.backgroundRGB.color.opacity(0.82)], startPoint: .top, endPoint: .bottom))
                 Circle().strokeBorder(bot.kemoSabeColor.opacity(0.75), lineWidth: 2)
-                KemoSabeFigure(shadow: false).padding(side * 0.1)
+                KemoSabeFigure(bot: bot, shadow: false).padding(side * 0.08)
             }
             .frame(width: side, height: side)
+            .accessibilityElement()
+            .accessibilityLabel("\(bot.name) in \(palette.name)")
             .accessibilityIdentifier("kemoSabePreview")
             Text(bot.name).font(.title2.weight(.semibold))
             Label("Your secure assistant · Apple on-device", systemImage: "lock.shield")
@@ -348,15 +99,59 @@ public struct KemoSabeHeader: View {
     }
 }
 
-/// KemoSabe's colors as swatches.
-public struct KemoSabeColorPicker: View {
+/// KemoSabe's look (its cloud or the two-tone figure), then its companion palettes as tiles, KemoSabe in each;
+/// picking either changes it everywhere.
+public struct KemoSabePalettePicker: View {
     @Binding var bot: BotSpec
-    var size: CGFloat
-    public init(bot: Binding<BotSpec>, size: CGFloat = 32) { _bot = bot; self.size = size }
+    var minimum: CGFloat
+    var tileHeight: CGFloat
+    public init(bot: Binding<BotSpec>, minimum: CGFloat = 96, tileHeight: CGFloat = 92) {
+        _bot = bot; self.minimum = minimum; self.tileHeight = tileHeight
+    }
     public var body: some View {
-        TintSwatches("", selection: Binding(get: { bot.kemoSabeTint }, set: { hex in
-            // Coral is KemoSabe's own color, kept as "no pick".
-            bot.look = .kemoSabe(tint: hex == BotTint.kemoSabe[0].hex ? nil : hex)
-        }), choices: BotTint.kemoSabe, defaultTitle: nil, defaultHex: BotTint.kemoSabe[0].hex, identifier: "kemoSabeColor", size: size)
+        CompanionPaletteGrid(selectedID: bot.kemoSabePalette.id, minimum: minimum, tileHeight: tileHeight, look: bot.kemoSabeLook) { palette in
+            bot.look = .kemoSabe(palette: palette.id, figure: bot.look.figure)
+        }
+    }
+    /// What the palette colors, under the grid.
+    public static func footer(name: String, device: String) -> String {
+        "\(name) everywhere it appears, and its card, ring, and buttons in your chats. It always runs on Apple’s on-device model on this \(device)."
+    }
+}
+
+/// KemoSabe's character: each one drawn as it looks, the picked one ringed. Picking one moves KemoSabe to that
+/// character's own palette when it's in the other's (Apricot for the cloud, Classic for Finder); any other palette stays.
+public struct KemoSabeCharacterPicker: View {
+    @Binding var bot: BotSpec
+    @Environment(\.colorScheme) private var scheme
+    public init(bot: Binding<BotSpec>) { _bot = bot }
+    public var body: some View {
+        let theme = TsukumoTheme(scheme)
+        HStack(spacing: 10) {
+            ForEach(KemoSabeLook.allCases) { look in
+                let selected = bot.kemoSabeLook == look
+                Button { choose(look) } label: {
+                    VStack(spacing: 6) {
+                        KemoSabeFigure(palette: selected ? bot.kemoSabePalette : .named(look.defaultPalette), mood: .idle, look: look)
+                            .frame(width: 64, height: 64)
+                        Text(look.title).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                    }
+                    .padding(10).frame(maxWidth: 120)
+                    .background(theme.ink.opacity(selected ? 0.07 : 0.03), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay { if selected { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(theme.accent, lineWidth: 1.5) } }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(look.title)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("kemoSabeCharacter-" + look.rawValue)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+    private func choose(_ look: KemoSabeLook) {
+        let palette = bot.kemoSabePalette.id
+        let other = KemoSabeLook.allCases.first { $0 != look }?.defaultPalette
+        bot.look = .kemoSabe(palette: palette == other ? look.defaultPalette : palette, figure: look)
     }
 }

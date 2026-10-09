@@ -1,6 +1,7 @@
 # Tsukumo for Mac: the side dock of your bots, in the menu bar (docs/ARCHITECTURE.md#the-tsukumo-mac-app).
 # Version 2.<NN> (AGENTS.md rule 2): build 200 is version 2.00.
-# Developer ID, hardened runtime, not sandboxed (it runs coding agents and reads the files they work on).
+# Developer ID, hardened runtime, not sandboxed (it runs coding agents and reads the files they work on, and
+# replaces itself in /Applications when the owner installs an update).
 # Generate with `xcodegen` in this folder; the .xcodeproj is never committed.
 name: Tsukumo
 options:
@@ -15,8 +16,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     # The Dock is version 2.<NN>: build 200 is 2.00, build 201 is 2.01.
     # scripts/release-mac.sh sets both lines for each release.
-    CURRENT_PROJECT_VERSION: 200
-    MARKETING_VERSION: '2.00'
+    CURRENT_PROJECT_VERSION: 211
+    MARKETING_VERSION: '2.11'
     # As in apps/ios: Local (the default) has no entitlement that needs Apple's developer portal; iCloud
     # adds the container iCloud.com.zlichtman.tsukumo with CloudKit and Sign in with Apple, only after the
     # owner approves them for com.zlichtman.tsukumo.mac.
@@ -24,6 +25,10 @@ settings:
 packages:
   TsukumoKit:
     path: ../../TsukumoKit
+  # Whisper and Kokoro on the GPU with MLX, and Laya's tokenizer (TsukumoKit/MLXVoice, its own package so
+  # TsukumoKit keeps no dependencies). Provenance and licenses: TsukumoKit/VOICE-NOTICE.md, LAYA-NOTICE.md.
+  TsukumoMLXVoice:
+    path: ../../TsukumoKit/MLXVoice
 targets:
   Tsukumo:
     type: application
@@ -40,13 +45,33 @@ targets:
       - package: TsukumoKit
         product: TsukumoGate
       - package: TsukumoKit
+        product: TsukumoGateway
+      - package: TsukumoKit
+        product: TsukumoSystemOne
+      - package: TsukumoKit
         product: TsukumoEngines
       - package: TsukumoKit
         product: TsukumoSync
       - package: TsukumoKit
+        product: TsukumoVoice
+      - package: TsukumoMLXVoice
+        product: TsukumoMLXVoice
+      # Laya's tokenizer for System One, on the same swift-transformers (TsukumoKit/LAYA-NOTICE.md).
+      - package: TsukumoMLXVoice
+        product: TsukumoLaya
+      - package: TsukumoKit
         product: TsukumoUI
       - package: TsukumoKit
         product: TsukumoDock
+      # Tsukumo's Dock as a Muse gadget: a port of Meta's Apache-2.0 Muse Gadget SDK (TsukumoKit/MUSE-NOTICE.md).
+      - package: TsukumoKit
+        product: TsukumoMuse
+      # Software Update: the app updates itself from tsukumo.json on zlichtman.com (checked end to end before it installs).
+      - package: TsukumoKit
+        product: TsukumoUpdate
+      # The Claude bot: tasks on the owner's own Claude, subject to KemoSabe through the gateway.
+      - package: TsukumoKit
+        product: TsukumoClaude
       - sdk: ServiceManagement.framework
     settings:
       base:
@@ -60,6 +85,14 @@ targets:
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Zach Lichtman"
         INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: "KemoSabe reads your calendar on this Mac only when a bot asks it something, and shares only the answer you allow."
         INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: "KemoSabe reads your reminders on this Mac only when a bot asks it something, and shares only the answer you allow."
+        # Talking to a bot: the microphone and Apple's on-device recognizer, only while you talk to one.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Tsukumo listens when you click or hold a bot to talk to it, and stops when you’re done. What you say is turned into text on this Mac and never recorded."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Tsukumo turns what you say to a bot into text on this Mac, with Apple’s on-device recognizer. Nothing you say is sent to Apple."
+        INFOPLIST_KEY_NSContactsUsageDescription: "KemoSabe looks up the contact a bot asks about, on this Mac only, and shares only the answer you allow."
+        # Muse pairs with this Mac over Bluetooth, only for five minutes after the owner clicks Pair in Settings, KemoSabe, Muse.
+        # No entitlement: com.apple.security.device.bluetooth is for sandboxed apps, and this one isn't sandboxed.
+        INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription: "Tsukumo uses Bluetooth only while you pair it with the Muse app, for five minutes after you click Pair in Settings."
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "KemoSabe reads when and roughly where you took photos, and your album names, on this Mac only. It never reads the pictures, and shares only the answer you allow."
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The menu bar item and the side dock: no Dock icon.
         INFOPLIST_KEY_LSUIElement: YES

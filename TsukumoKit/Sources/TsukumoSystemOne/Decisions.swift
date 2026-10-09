@@ -75,9 +75,15 @@ public struct DecisionAnswer: Codable, Hashable, Sendable {
     public let questionID: String
     /// In option order, summing to 1.
     public let probabilities: [Double]
-    public init(questionID: String, probabilities: [Double]) { self.questionID = questionID; self.probabilities = probabilities }
+    /// The provider's own confidence, when it reports one (a System One API's `confidence`, which for a
+    /// choice is (n·p − 1)/(n − 1), stricter than the top probability).
+    public let reported: Double?
+    public init(questionID: String, probabilities: [Double], reported: Double? = nil) {
+        self.questionID = questionID; self.probabilities = probabilities; self.reported = reported
+    }
     public var selectedIndex: Int? { probabilities.indices.max { probabilities[$0] < probabilities[$1] } }
-    public var confidence: Double { probabilities.max() ?? 0 }
+    /// How sure: the top probability, or the provider's own confidence when that is stricter.
+    public var confidence: Double { min(probabilities.max() ?? 0, reported ?? 1) }
 }
 
 public struct DecisionResult: Hashable, Sendable {
@@ -89,7 +95,8 @@ public struct DecisionResult: Hashable, Sendable {
     public init(modelVersion: String, answers: [DecisionAnswer], calibrated: Bool, abstention: String?) {
         self.modelVersion = modelVersion; self.answers = answers; self.calibrated = calibrated; self.abstention = abstention
     }
-    /// The lowest top probability across its answers.
+    /// The lowest confidence across its answers (each the top probability, or the provider's own
+    /// confidence when that is stricter).
     public var score: Double { answers.map(\.confidence).min() ?? 0 }
 
     public func validate(for request: DecisionRequest) throws {
@@ -99,6 +106,7 @@ public struct DecisionResult: Hashable, Sendable {
         for (answer, question) in zip(answers, request.questions) {
             guard answer.questionID == question.id, answer.probabilities.count == question.options.count,
                   answer.probabilities.allSatisfy({ $0.isFinite && (0...1).contains($0) }),
+                  answer.reported.map({ $0.isFinite && (0...1).contains($0) }) ?? true,
                   abs(answer.probabilities.reduce(0, +) - 1) < 0.001 else { throw DecisionError.invalidOutput }
         }
     }

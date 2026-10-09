@@ -1,8 +1,8 @@
 import SwiftUI
 import TsukumoCore
 
-// Who's talking: KemoSabe as its companion artwork (the cloud from the website demo), every other bot
-// as its clay character with a small mark for what runs it, as in the Mac dock.
+// Who's talking: KemoSabe as its own face (`KemoSabeFace`, in its look and palette), and every other bot as its
+// character (`BotCharacterView`: its Codex pet, or its service's mark), as in the Mac dock.
 
 /// How the app names an engine and which mark it wears. The app knows its API connections (a bot only
 /// holds the connection's ID), so it provides this through the environment.
@@ -28,8 +28,9 @@ public struct EngineInfo: Hashable, Sendable {
             case "cursor-agent": EngineInfo(title: "Cursor Agent", detail: "Runs on your Mac", mark: .mac)
             default: EngineInfo(title: id, detail: "Runs on your Mac", mark: .mac)
             }
-        case .acp(let id): EngineInfo(title: id, detail: "Runs on your Mac", mark: .mac)
+        case .acp(let id): EngineInfo(title: id == "gemini" ? "Gemini CLI" : id, detail: "Runs on your Mac", mark: .mac)
         case .mlx(let model): EngineInfo(title: model, detail: "On this device", mark: .generic)
+        case .service(let id): EngineInfo(title: ServiceID(rawValue: id)?.title ?? id, detail: "Asks KemoSabe through the gateway", mark: .generic)
         case .unknown: EngineInfo(title: "Unknown", detail: "Made by a newer Tsukumo", mark: .generic)
         }
     }
@@ -69,42 +70,19 @@ public struct EngineMarkView: View {
     }
 }
 
-/// KemoSabe's companion artwork: resting, or at its computer while it reads this device.
-public struct KemoSabeFigure: View {
-    public var searching: Bool
-    public var shadow: Bool
-    public init(searching: Bool = false, shadow: Bool = true) { self.searching = searching; self.shadow = shadow }
-    public var body: some View {
-        GeometryReader { geometry in
-            let side = min(geometry.size.width, geometry.size.height)
-            ZStack {
-                if shadow {
-                    Ellipse().fill(.black.opacity(0.18)).frame(width: side * 0.47, height: side * 0.055)
-                        .blur(radius: side * 0.024).offset(y: side * 0.414)
-                }
-                TsukumoArt.image(searching ? .kemoSabeSearching : .kemoSabe).resizable().interpolation(.high).scaledToFit()
-                    .frame(width: side, height: side)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-        }
-        .accessibilityElement()
-        .accessibilityLabel(searching ? "KemoSabe, looking on this device" : "KemoSabe")
-    }
-}
-
-/// A bot's picture in the chat: KemoSabe's artwork in a soft circle (with a lock ring when it answers
-/// for another bot), or a bot's clay character with its engine's mark in the corner.
+/// A bot's picture in the chat: KemoSabe's face in a soft circle (with a lock ring when it answers for another
+/// bot), or the bot's character.
 public struct BotAvatar: View {
     public let bot: BotSpec
     public var size: CGFloat
-    /// KemoSabe answering for another bot, on this device: a coral ring and a lock.
+    /// KemoSabe answering for another bot, on this device: a ring and a lock in its color.
     public var locked: Bool
-    public var state: ClayState
+    public var state: BotState
     public var showsEngine: Bool
     @Environment(\.colorScheme) private var scheme
     @Environment(\.engineInfo) private var engineInfo
 
-    public init(bot: BotSpec, size: CGFloat = 28, locked: Bool = false, state: ClayState = .idle, showsEngine: Bool = true) {
+    public init(bot: BotSpec, size: CGFloat = 28, locked: Bool = false, state: BotState = .idle, showsEngine: Bool = true) {
         self.bot = bot; self.size = size; self.locked = locked; self.state = state; self.showsEngine = showsEngine
     }
 
@@ -113,10 +91,10 @@ public struct BotAvatar: View {
         Group {
             if bot.isKemoSabe {
                 let tint = bot.kemoSabeColor
+                let palette = bot.kemoSabePalette
                 ZStack {
-                    Circle().fill(bot.kemoSabeTint == nil ? theme.ink.opacity(0.06) : tint.opacity(0.16))
-                    TsukumoArt.image(.kemoSabe).resizable().interpolation(.high).scaledToFit()
-                        .frame(width: size * 1.2, height: size * 1.2)
+                    Circle().fill(palette.id == "apricot" || palette.id == "classic" ? theme.ink.opacity(0.06) : tint.opacity(0.16))
+                    KemoSabeFace(palette: palette, look: bot.kemoSabeLook).frame(width: size, height: size)
                 }
                 .frame(width: size, height: size)
                 .clipShape(Circle())
@@ -130,17 +108,7 @@ public struct BotAvatar: View {
                     }
                 }
             } else {
-                ClayCharacter(look: bot.look, state: state, animated: state != .idle, shadow: false)
-                    .frame(width: size * 1.12, height: size * 1.12)
-                    .frame(width: size, height: size)
-                    .overlay(alignment: .bottomTrailing) {
-                        if showsEngine {
-                            EngineMarkView(engineInfo(bot.engine).mark, size: size * 0.34)
-                                .padding(size * 0.06)
-                                .background(theme.background, in: Circle())
-                                .offset(x: size * 0.12, y: size * 0.08)
-                        }
-                    }
+                BotCharacterView(bot: bot, state: state, size: size, animated: false)
             }
         }
         .accessibilityHidden(true)

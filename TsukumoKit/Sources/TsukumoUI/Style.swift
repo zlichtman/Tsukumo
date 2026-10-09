@@ -1,7 +1,7 @@
 import SwiftUI
 import TsukumoCore
 
-// TsukumoUI: the demo chat, the add-bot sheet, and Activity (docs/ARCHITECTURE.md#tsukumoui).
+// TsukumoUI: the demo chat, the bots' settings, and Activity (docs/ARCHITECTURE.md#tsukumoui).
 // Plain SwiftUI so the iPhone app and the Mac app share it. Everything here reads its colors
 // from `TsukumoTheme`, which follows the color scheme, so a view renders the same in a test's
 // `ImageRenderer` as on screen.
@@ -22,25 +22,39 @@ public struct RGB: Hashable, Sendable {
         return RGB(red: red + (other.red - red) * t, green: green + (other.green - green) * t, blue: blue + (other.blue - blue) * t)
     }
     public var color: Color { Color(.sRGB, red: red, green: green, blue: blue) }
+    /// "EF705B"
+    public var hex: String {
+        String(format: "%02X%02X%02X", Int((red * 255).rounded()), Int((green * 255).rounded()), Int((blue * 255).rounded()))
+    }
+    /// A color picked in a color picker, as sRGB numbers.
+    public init(_ color: Color) {
+        let resolved = color.resolve(in: EnvironmentValues())
+        self.init(red: min(1, max(0, Double(resolved.red))), green: min(1, max(0, Double(resolved.green))), blue: min(1, max(0, Double(resolved.blue))))
+    }
+    /// WCAG relative luminance.
+    public var luminance: Double {
+        func linear(_ c: Double) -> Double { c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4) }
+        return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    }
+    /// WCAG contrast ratio, from 1 to 21.
+    public func contrast(with other: RGB) -> Double {
+        let (a, b) = (luminance, other.luminance)
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
     public static let white = RGB(red: 1, green: 1, blue: 1)
     public static let black = RGB(red: 0, green: 0, blue: 0)
 }
 
 public extension BotSpec {
-    /// KemoSabe's color in the chat (its card, ring, lock, and buttons): the owner's pick, or coral.
-    var kemoSabeColor: Color { RGB(hex: kemoSabeTint ?? BotTint.kemoSabe[0].hex).color }
-}
-
-public extension BotLook {
-    var bodyRGB: RGB { RGB(hex: bodyHex) }
-    var accentRGB: RGB { RGB(hex: accentHex) }
-    /// The ring at its feet in the dock: the engine's color, its own, or none.
-    func ringColor(engineHex: String) -> Color? {
-        switch ring {
-        case .engine: RGB(hex: engineHex).color
-        case .custom: RGB(hex: ringColor ?? engineHex).color
-        case .hidden: nil
-        }
+    /// KemoSabe's color in the chat (its card, ring, lock, and buttons): its companion palette's accent
+    /// (coral in Apricot), or the palette's body where the accent is too pale to fill a button.
+    var kemoSabeColor: Color { kemoSabePalette.legibleAccentRGB.color }
+    /// The same color for words on the chat's background: moved toward the ink until it reads (3:1).
+    func kemoSabeTextColor(_ scheme: ColorScheme) -> Color {
+        let theme = TsukumoTheme(scheme)
+        var color = kemoSabePalette.legibleAccentRGB
+        for _ in 0..<10 where color.contrast(with: theme.backgroundRGB) < 3 { color = color.mix(theme.inkRGB, 0.15) }
+        return color.color
     }
 }
 
@@ -48,6 +62,8 @@ public extension BotPalette {
     var bodyRGB: RGB { RGB(hex: body) }
     var accentRGB: RGB { RGB(hex: accent) }
     var backgroundRGB: RGB { RGB(hex: background) }
+    /// The accent, or the body when the accent is too pale to carry white text (Ink's cream).
+    var legibleAccentRGB: RGB { accentRGB.luminance > 0.5 ? bodyRGB : accentRGB }
 }
 
 /// The chat's colors: KemoSabe's Apricot, as in the website demo. Dark is the demo's plum; light is a
@@ -60,11 +76,13 @@ public struct TsukumoTheme: Sendable {
     private var dark: Bool { scheme == .dark }
 
     /// The page behind the chat (plum `211B2C` in dark).
-    public var background: Color { dark ? Self.apricot.backgroundRGB.color : RGB(hex: "FBF6EE").color }
+    public var background: Color { backgroundRGB.color }
+    public var backgroundRGB: RGB { dark ? Self.apricot.backgroundRGB : RGB(hex: "FBF6EE") }
     /// The coral every KemoSabe card and the send button use (`EF705B`).
     public var accent: Color { Self.apricot.accentRGB.color }
     /// Body text: cream on plum, plum on paper.
-    public var ink: Color { dark ? RGB(hex: "F3EADF").color : RGB(hex: "2A2234").color }
+    public var ink: Color { inkRGB.color }
+    public var inkRGB: RGB { dark ? RGB(hex: "F3EADF") : RGB(hex: "2A2234") }
     /// Quieter text: names, captions, "Working…".
     public var secondary: Color { ink.opacity(dark ? 0.58 : 0.6) }
     /// A soft fill: the owner's bubble, suggestion rows, the composer.

@@ -4,18 +4,17 @@ import SwiftUI
 import TsukumoCore
 import TsukumoUI
 
-// The dock's characters (design/UI-GUIDE.md#the-side-dock), ported from the old Mac app's dock.
-// The drawing is TsukumoUI's `ClayPainter` (one source of truth for the clay family, on iPhone and Mac);
-// this file decides what a character acts out, suggests a character for a new bot, and keeps the dock's
-// small performances. KemoSabe keeps its own companion artwork.
+// What each tile acts out (design/UI-GUIDE.md, the side dock), and the dock's small performances. KemoSabe is
+// drawn by TsukumoUI's `KemoSabeFigure` in its owner's look (its cloud, or the two-tone figure) and mood; every other tile is its
+// service's mark (`ServiceMarkView`), with the state shown around it.
 
-/// What a bot's character acts out, from what the bot is doing.
+/// What a bot's tile acts out, from what the bot is doing.
 public enum DockCharacterState {
     /// One state, most urgent first: needing the owner, a chirp's hop, a reply read aloud, a running turn
     /// (a coding agent at work types; otherwise thinking until words come, then talking), the done
     /// celebration, then asleep (tucked away or at night) or idle.
     public static func resolve(needsYou: Bool, running: Bool, hasWords: Bool, coding: Bool, voicing: Bool,
-                               sinceChirp: TimeInterval?, done: Bool, tucked: Bool, night: Bool) -> ClayState {
+                               sinceChirp: TimeInterval?, done: Bool, tucked: Bool, night: Bool) -> BotState {
         if needsYou { return .needsYou }
         if let sinceChirp, sinceChirp >= 0, sinceChirp < 2.5 { return .chirping }
         if voicing { return .talking }
@@ -31,22 +30,6 @@ public enum DockCharacterState {
     }
 }
 
-public extension ClayState {
-    /// The word for a tile's accessibility value and the bubble's header.
-    var label: String {
-        switch self {
-        case .idle: ""
-        case .working: "Working"
-        case .thinking: "Thinking"
-        case .talking: "Talking"
-        case .chirping: "Chirping in"
-        case .needsYou: "Needs you"
-        case .done: "Done"
-        case .sleeping: "Asleep"
-        }
-    }
-}
-
 /// A poke on a tile: click-and-hold wiggles, a double click giggles.
 public enum DockReaction: String, Equatable, Sendable { case poke, giggle }
 
@@ -56,8 +39,11 @@ public enum DockSurface: Hashable, Sendable {
     case bot(UUID)
     /// Every bot in one thread.
     case together
-    /// A bot's settings: one to edit, or nil for a new one.
-    case edit(UUID?)
+    /// A bot's panel: KemoSabe's palette and voice, or one of the owner's bots (who it is, what it runs on, what it
+    /// asked, what was shared, what it sent, its grants and Revoke, and for a bot that chats, its settings).
+    case panel(UUID)
+    /// Adding a bot: bringing in one the owner has elsewhere, or making one.
+    case addBot
 }
 
 /// A speech bubble next to a tile for a few seconds.
@@ -66,23 +52,6 @@ public struct DockCallout: Equatable, Identifiable, Sendable {
     public let bot: UUID
     public let text: String
     public init(bot: UUID, text: String) { self.bot = bot; self.text = text }
-}
-
-// MARK: Starting a bot
-
-/// The three bots a new dock offers to start from (TsukumoCore's `StarterBot`, shared with the iPhone's
-/// first run). `BotLook.suggested` lives beside it in TsukumoCore.
-public typealias DockStarter = StarterBot
-
-// MARK: Engines on the dock
-
-/// Each engine's color, for the thin ring at a bot's feet (TsukumoUI's `EngineColor`, so the editors'
-/// previews match the dock).
-public enum DockEngineColor {
-    public static func hex(_ engine: EngineID) -> String { EngineColor.hex(engine) }
-    public static func color(_ engine: EngineID) -> Color { RGB(hex: hex(engine)).color }
-    /// The ring a bot wears: its engine's color, its own, or none.
-    public static func ring(for bot: BotSpec) -> Color? { bot.look.ringColor(engineHex: hex(bot.engine)) }
 }
 
 // MARK: Motion

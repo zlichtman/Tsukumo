@@ -14,6 +14,9 @@ struct Storage {
     static var standard: URL { applicationSupport.appendingPathComponent("Tsukumo", isDirectory: true) }
     /// Where the preview of Tsukumo (before October 2, 2026) kept its files.
     static var preview: URL { applicationSupport.appendingPathComponent("Tsukumo Preview", isDirectory: true) }
+    /// The voice models the old KemoSabe app downloaded (read only: a file there that passes its pinned
+    /// check is copied instead of downloaded again).
+    static var oldVoiceModels: URL { applicationSupport.appendingPathComponent("KemoSabe/VoiceModels", isDirectory: true) }
     private static var applicationSupport: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0] }
 
     func url(_ name: String) -> URL { folder.appendingPathComponent(name) }

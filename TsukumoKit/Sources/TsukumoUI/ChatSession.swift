@@ -1,6 +1,8 @@
 import Foundation
 import Observation
 import TsukumoCore
+import TsukumoEngines
+import TsukumoVoice
 
 /// One chat on screen: the thread, the composer's draft and chips, and the turns running in it.
 ///
@@ -21,6 +23,16 @@ import TsukumoCore
         case answered(GateExchangeID, GateAnswerCard.Outcome)
         case replied(UUID)
         case stopped(UUID)
+        case needsApproval(String)
+        case approved(String, Bool)
+    }
+
+    /// Something a coding bot wants to do that its access leaves to the owner ("Edit Sources/App.swift").
+    public struct PendingApproval: Identifiable, Hashable, Sendable {
+        public let id: String
+        public let bot: UUID
+        public let summary: String
+        public init(id: String, bot: UUID, summary: String) { self.id = id; self.bot = bot; self.summary = summary }
     }
 
     /// A bot's turn in progress.
@@ -41,13 +53,30 @@ import TsukumoCore
     /// "Answered Claude: “After 7 tonight”", shown at the top for a moment.
     public private(set) var banner: String?
     public private(set) var events: [Event] = []
+    /// What coding bots wait to be allowed, oldest first (their cards show Allow and Don't allow).
+    public private(set) var approvals: [PendingApproval] = []
 
     @ObservationIgnored private let runner: any BotTurnRunning
     @ObservationIgnored private let gate: any KemoSabeAnswering
     @ObservationIgnored private let router: (any TurnRouting)?
     @ObservationIgnored private var turns: [UUID: Task<Void, Never>] = [:]
-    @ObservationIgnored private var consents: [GateExchangeID: CheckedContinuation<ConsentChoice, Never>] = [:]
-    @ObservationIgnored private var shareWaiters: [GateExchangeID: CheckedContinuation<Bool, Never>] = [:]
+    /// Who waits on the owner's answer to a card, by its exchange. Each wait is resumed exactly once: by the
+    /// owner's answer, or by `endWaits` when the exchange ends any other way (timeout, withdraw, cancel, stop).
+    @ObservationIgnored private var consents: [GateExchangeID: [CheckedContinuation<ConsentChoice, Never>]] = [:]
+    @ObservationIgnored private var shareWaiters: [GateExchangeID: [CheckedContinuation<Bool, Never>]] = [:]
+    @ObservationIgnored private var approvalWaiters: [String: CheckedContinuation<Bool, Never>] = [:]
+    /// Messages from an outside caller (`runIsolated`): their turns are isolated, with no history, tools, or KemoSabe.
+    @ObservationIgnored private var isolatedMessages: Set<UUID> = []
+    /// Outside callers' questions in flight, by exchange: stopping the chat cancels them (and the Gate's reading).
+    @ObservationIgnored private var callerTasks: [GateExchangeID: Task<GateAnswerCard, Never>] = [:]
+    /// Exchanges this chat stopped while they were in flight: whatever comes back for them is dropped, not shown.
+    @ObservationIgnored private var stoppedExchanges: Set<GateExchangeID> = []
+    /// What a coding bot is doing, as it happens (the dock's work cues and editor follow it).
+    @ObservationIgnored public var onWork: ((UUID, CodingActivity) -> Void)?
+    /// A coding bot is waiting on the owner (the dock can say so beside its tile).
+    @ObservationIgnored public var onApprovalNeeded: ((PendingApproval) -> Void)?
+    /// A bot's turn ended, however it ended.
+    @ObservationIgnored public var onTurnEnded: ((UUID) -> Void)?
     /// Share cards waiting on the owner: one Sensitive item, and exactly what would be sent.
     public private(set) var sharePrompts: [GateExchangeID: SharePrompt] = [:]
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
@@ -57,6 +86,13 @@ import TsukumoCore
     @ObservationIgnored public var onActivity: ((ActivityItem) -> Void)?
     /// How long the banner stays.
     @ObservationIgnored public var bannerSeconds: Double = 6
+    /// The app's voice: a message said aloud (`say`) gets its reply spoken, in the bot's voice, while it
+    /// streams in. Nil (tests, the demo) never speaks.
+    @ObservationIgnored public var voice: VoiceHub?
+    /// The message said aloud whose reply is spoken.
+    @ObservationIgnored private var spokenMessage: UUID?
+    /// Replies being spoken now, by bot.
+    @ObservationIgnored private var spoken: [UUID: ReplySpeech] = [:]
 
     public init(thread: ChatThread, bots: [BotSpec], runner: any BotTurnRunning, gate: any KemoSabeAnswering, router: (any TurnRouting)? = nil) {
         self.thread = thread; self.bots = bots; self.runner = runner; self.gate = gate; self.router = router
@@ -66,6 +102,8 @@ import TsukumoCore
 
     /// The thread's bots, in thread order.
     public var threadBots: [BotSpec] { thread.bots(from: bots) }
+    /// The host may refuse persisted mutations while its store is recovering.
+    @ObservationIgnored public var canWrite: @MainActor () -> Bool = { true }
     public func bot(_ id: UUID?) -> BotSpec? { id.flatMap { id in bots.first { $0.id == id } } }
     /// Who the draft would go to now: the tagged bots, or the fallback.
     public var recipients: [BotSpec] {
@@ -115,8 +153,11 @@ import TsukumoCore
     /// Replaces the bots (after one is added, edited, or removed). The thread keeps every bot that still
     /// exists and gains new ones.
     public func update(bots: [BotSpec]) {
+        guard canWrite() else { return }
         self.bots = bots
         let ids = bots.map(\.id)
+        // A bot that left (taken off the dock, removed on another device) stops at once: its turn and what it waits on.
+        for id in Array(turns.keys) where !ids.contains(id) { stop(bot: id) }
         thread.botIDs = thread.botIDs.filter(ids.contains) + ids.filter { !thread.botIDs.contains($0) }
         chips = chips.filter(ids.contains)
         changed()
@@ -124,6 +165,7 @@ import TsukumoCore
 
     /// Starts over with `thread` (a new chat, or one picked from the list). Running turns stop.
     public func open(_ thread: ChatThread) {
+        guard canWrite() else { return }
         stopAll()
         self.thread = thread
         draft = ""; chips = []; banner = nil
@@ -132,6 +174,7 @@ import TsukumoCore
     /// Sends the draft. Returns the owner's message, or nil when there was nothing to send.
     @discardableResult
     public func send() -> Message? {
+        guard canWrite() else { return nil }
         guard canSend else { return nil }
         let text = draft
         let decision = thread.routing(text: text, chips: chips, bots: bots)
@@ -151,7 +194,7 @@ import TsukumoCore
             changed()
             Task { [weak self] in
                 let choice = await router.route(text: text, thread: snapshot, bots: everyone)
-                guard let self else { return }
+                guard let self, self.canWrite() else { return }
                 let target = choice?.bot ?? fallback
                 guard let target, let index = self.thread.messages.firstIndex(where: { $0.id == message.id }) else { return }
                 self.thread.messages[index].tags = [target]
@@ -164,12 +207,56 @@ import TsukumoCore
     }
 
     private func deliver(_ text: String, to ids: [UUID], routed: (UUID, Bool, String?)?) -> Message? {
+        guard canWrite() else { return nil }
         guard let message = thread.send(text, to: ids) else { return nil }
         draft = ""
         changed()
         if let routed { record(routedTo: routed.0, bySystemOne: routed.1, reason: routed.2) }
         startTurns(for: message)
         return message
+    }
+
+    /// Something said aloud. To a bot (tapping it in the dock, or holding it on iPhone): it goes to that bot
+    /// as the owner's message, after its running turn (if any) stops. To the chat (the composer's
+    /// microphone): with nothing typed it's sent like a typed message (tags and "@name" work); with a draft
+    /// it's added to the draft for the owner to send. A sent message's reply is spoken while it streams in,
+    /// when the app has a voice and replies are spoken.
+    @discardableResult
+    public func say(_ text: String, to botID: UUID? = nil) async -> Message? {
+        guard canWrite() else { return nil }
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        if let botID {
+            guard bot(botID) != nil else { return nil }
+            if let running = turns[botID] { running.cancel(); await running.value }
+            guard canWrite(), let message = thread.send(text, to: [botID]) else { return nil }
+            changed()
+            spokenMessage = message.id
+            startTurns(for: message)
+            return message
+        }
+        let typed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !typed.isEmpty || isBusy {
+            draft = typed.isEmpty ? text : typed + " " + text
+            return nil
+        }
+        draft = text
+        guard canSend else { return nil }
+        let message = send()
+        if let message {
+            spokenMessage = message.id
+            // A message sent to a tagged bot has started its turn already.
+            startSpeaking(for: message.id)
+        }
+        return message
+    }
+
+    /// Starts speaking the reply to `messageID`, from the first bot answering it.
+    private func startSpeaking(for messageID: UUID) {
+        guard spokenMessage == messageID, let voice, let message = thread.messages.first(where: { $0.id == messageID }) else { return }
+        guard let botID = thread.turns(for: message).first(where: { working[$0] != nil }), let bot = bot(botID) else { return }
+        spokenMessage = nil
+        if let reply = voice.speakReply(from: bot) { spoken[botID] = reply }
     }
 
     private func record(routedTo bot: UUID, bySystemOne: Bool, reason: String?) {
@@ -187,9 +274,17 @@ import TsukumoCore
             guard let bot = bot(botID) else { continue }
             working[botID] = Working(startedAt: Date())
             events.append(.working(botID))
-            let snapshot = thread, everyone = bots
-            let turn = BotTurn(bot: bot, message: message, thread: snapshot, bots: everyone) { [weak self] question, purpose in
-                guard let self else { return nil }
+            let snapshot = thread, everyone = bots, isolated = isolatedMessages.contains(message.id)
+            var approve: (@Sendable (ApprovalRequest) async -> Bool)?
+            if !isolated {
+                approve = { [weak self] request in
+                    guard let self else { return false }
+                    return await self.waitForApproval(request, bot: botID)
+                }
+            }
+            let turn = BotTurn(bot: bot, message: message, thread: snapshot, bots: everyone, approve: approve, isolated: isolated) { [weak self] question, purpose in
+                // An outside caller's task has no KemoSabe: the caller asks KemoSabe itself, on its own consent.
+                guard let self, !isolated else { return nil }
                 return await self.askKemoSabe(for: bot, question: question, purpose: purpose)
             }
             let runner = self.runner
@@ -199,15 +294,20 @@ import TsukumoCore
                 var saidSomething = false
                 do {
                     for try await event in runner.run(turn) {
-                        guard let self else { return }
+                        guard let self, self.canWrite() else { return }
+                        // A bot that left the chat posts nothing more, whatever its runner still had buffered.
+                        guard self.bot(botID) != nil else { continue }
                         switch event {
                         case .text(let delta):
                             reply += delta
                             self.working[botID]?.text = reply
+                            self.spoken[botID]?.update(reply, final: false)
                         case .status(let line):
                             saidSomething = true
                             self.thread.append(Message(author: .bot(botID), parts: [.status(line)]))
                             self.changed()
+                        case .activity(let activity):
+                            self.onWork?(botID, activity)
                         }
                     }
                 } catch is CancellationError {
@@ -220,11 +320,21 @@ import TsukumoCore
                 self.finish(botID, reply: reply, problem: problem, saidSomething: saidSomething)
             }
         }
+        startSpeaking(for: message.id)
     }
 
     private func finish(_ botID: UUID, reply: String, problem: String?, saidSomething: Bool) {
         working[botID] = nil
         turns[botID] = nil
+        for approval in approvals where approval.bot == botID { approvalWaiters.removeValue(forKey: approval.id)?.resume(returning: false) }
+        approvals.removeAll { $0.bot == botID }
+        onTurnEnded?(botID)
+        if let speech = spoken.removeValue(forKey: botID) {
+            if problem == nil { speech.update(reply.trimmingCharacters(in: .whitespacesAndNewlines), final: true) } else { speech.stop() }
+        }
+        guard canWrite() else { return }
+        // A bot that left the chat while it worked says nothing more here, not even what it had streamed.
+        guard bot(botID) != nil else { changed(); return }
         let name = bot(botID)?.name ?? "The bot"
         let text = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty {
@@ -242,18 +352,73 @@ import TsukumoCore
         changed()
     }
 
-    /// Stops every running turn.
+    /// Stops everything in flight: every running turn, and every KemoSabe exchange this chat started (a bot's or
+    /// an outside caller's, on screen, queued, or still reading). Each exchange is withdrawn from KemoSabe first, so
+    /// its wait there ends at once and nothing is decided for the owner; then its card's waits end. The chat stays
+    /// usable for new messages.
     public func stopAll() {
         for (_, task) in turns { task.cancel() }
-        for (exchange, continuation) in consents { continuation.resume(returning: .deny); liveExchanges.remove(exchange) }
-        consents = [:]
-        for (_, continuation) in shareWaiters { continuation.resume(returning: false) }
-        shareWaiters = [:]
+        for (_, task) in callerTasks { task.cancel() }
+        for exchange in liveExchanges.union(consents.keys).union(shareWaiters.keys) {
+            if liveExchanges.contains(exchange) { stoppedExchanges.insert(exchange) }
+            gate.withdraw(exchange)
+            endWaits(exchange)
+        }
+        liveExchanges.removeAll()
+        for (_, continuation) in approvalWaiters { continuation.resume(returning: false) }
+        approvalWaiters = [:]
+        approvals = []
+    }
+
+    /// Stops one bot's running turn: its KemoSabe questions are withdrawn first (so KemoSabe stops reading for it and
+    /// nothing waits on their cards), anything it waits to be allowed is answered No, and its turn is cancelled. A bot
+    /// that left (`update(bots:)`) posts nothing it had streamed so far.
+    public func stop(bot id: UUID) {
+        let asked = thread.messages.flatMap(\.parts).compactMap { part -> GateExchangeID? in
+            if case .gateQuestion(let card) = part, card.askedBy == id { card.exchange } else { nil }
+        }
+        for exchange in asked where liveExchanges.contains(exchange) || consents[exchange] != nil || shareWaiters[exchange] != nil {
+            if liveExchanges.contains(exchange) { stoppedExchanges.insert(exchange) }
+            gate.withdraw(exchange)
+            endWaits(exchange)
+            liveExchanges.remove(exchange)
+        }
+        turns[id]?.cancel()
+        for approval in approvals where approval.bot == id {
+            approvalWaiters.removeValue(forKey: approval.id)?.resume(returning: false)
+        }
+        approvals.removeAll { $0.bot == id }
+    }
+
+    // MARK: A coding bot's approvals
+
+    private func waitForApproval(_ request: ApprovalRequest, bot botID: UUID) async -> Bool {
+        guard working[botID] != nil else { return false }
+        let pending = PendingApproval(id: request.id, bot: botID, summary: request.summary)
+        approvals.append(pending)
+        events.append(.needsApproval(request.id))
+        onApprovalNeeded?(pending)
+        let allowed = await withCheckedContinuation { continuation in approvalWaiters[request.id] = continuation }
+        approvals.removeAll { $0.id == request.id }
+        events.append(.approved(request.id, allowed))
+        guard canWrite() else { return false }
+        let name = bot(botID)?.name ?? "A bot"
+        onActivity?(ActivityItem(kind: .botWork, title: "\(name) asked: \(request.summary)", detail: allowed ? "You allowed it." : "You didn’t allow it.",
+                                 botID: botID, threadID: thread.id))
+        return allowed
+    }
+
+    /// The owner's answer to a coding bot's request.
+    public func decideApproval(_ id: String, allow: Bool) {
+        guard canWrite() else { return }
+        guard let continuation = approvalWaiters.removeValue(forKey: id) else { return }
+        continuation.resume(returning: allow)
     }
 
     // MARK: KemoSabe's card
 
     private func askKemoSabe(for bot: BotSpec, question: String, purpose: String) async -> String? {
+        guard canWrite() else { return nil }
         let request = KemoSabeQuestion(asker: bot, question: question, purpose: purpose)
         let card = GateQuestionCard(exchange: request.exchange, askedBy: bot.id, askerName: bot.name, question: question, purpose: purpose)
         let message = Message(author: .bot(BotSpec.kemoSabeID), parts: [.gateQuestion(card)])
@@ -261,7 +426,7 @@ import TsukumoCore
         liveExchanges.insert(request.exchange)
         events.append(.askedKemoSabe(request.exchange, by: bot.id))
         changed()
-        let answer = await gate.ask(request, consent: { [weak self] in
+        let returned = await gate.ask(request, consent: { [weak self] in
             guard let self else { return .deny }
             return await self.waitForConsent(request.exchange)
         }, share: { [weak self] prompt in
@@ -269,6 +434,10 @@ import TsukumoCore
             return await self.waitForShare(prompt, request.exchange)
         })
         liveExchanges.remove(request.exchange)
+        // However the exchange ended (answered, timed out, withdrawn, cancelled), nothing waits on its card any more.
+        endWaits(request.exchange)
+        guard canWrite() else { return nil }
+        let answer = dropIfStopped(returned, request.exchange)
         if let index = thread.messages.firstIndex(where: { $0.id == message.id }) {
             thread.messages[index].parts = [.gateAnswer(answer)]
         } else {
@@ -281,36 +450,206 @@ import TsukumoCore
         return answer.outcome == .answered ? answer.shared : nil
     }
 
+
+    // MARK: Outside callers (Muse)
+
+    /// A question from an outside caller (Muse), on KemoSabe's card in this chat: its consent buttons the
+    /// first time, then what was shared and what stayed. The caller is its own recipient.
+    public func askKemoSabe(from caller: KemoSabeCaller, question: String, purpose: String) async -> GateAnswerCard {
+        await callerCard(caller, question: question, purpose: purpose) { gate, exchange, consent, share in
+            await gate.ask(caller: caller, exchange: exchange, question: question, purpose: purpose, consent: consent, share: share)
+        }
+    }
+
+    /// A bot's reply to an outside caller's task, leaving only through KemoSabe: a card here ("Share Chef’s reply
+    /// with Muse?" and exactly what would be sent) the first time, Muse's consent after that, and the journal.
+    /// Returns the card; its `shared` is what the caller may have. A shared reply isn't shown as shared (in this
+    /// chat or Activity) until `finishRelease` says whether it was really handed over.
+    public func release(_ reply: String, from botName: String, to caller: KemoSabeCaller, purpose: String) async -> GateAnswerCard {
+        let preview = reply.count <= 280 ? reply : String(reply.prefix(279)) + "…"
+        let question = "Share \(botName)’s reply with \(caller.name)? “\(preview)”"
+        return await callerCard(caller, question: question, purpose: purpose, deferShared: true) { gate, exchange, consent, _ in
+            await gate.release(reply, source: "\(botName)’s reply to \(caller.name)’s task", to: caller, exchange: exchange,
+                               question: question, purpose: purpose, consent: consent)
+        }
+    }
+
+    /// KemoSabe's card for an outside caller: posted, its consent and share answered here, then its answer.
+    private func callerCard(_ caller: KemoSabeCaller, question: String, purpose: String, deferShared: Bool = false,
+                            _ work: @escaping @MainActor (any KemoSabeAnswering, GateExchangeID, @escaping @Sendable () async -> ConsentChoice,
+                                                          @escaping @Sendable (SharePrompt) async -> Bool) async -> GateAnswerCard) async -> GateAnswerCard {
+        let exchange = GateExchangeID()
+        guard canWrite() else {
+            return GateAnswerCard(exchange: exchange, askerName: caller.name, question: question, outcome: .unavailable, device: "this device")
+        }
+        let card = GateQuestionCard(exchange: exchange, askedBy: nil, askerName: caller.name, question: question, purpose: purpose)
+        let message = Message(author: .bot(BotSpec.kemoSabeID), parts: [.gateQuestion(card)])
+        thread.append(message)
+        liveExchanges.insert(exchange)
+        changed()
+        // The work is the chat's own task, so stopping the chat cancels it, and the Gate sees that while it reads.
+        let gate = self.gate
+        let consent: @Sendable () async -> ConsentChoice = { [weak self] in
+            guard let self else { return .deny }
+            return await self.waitForConsent(exchange)
+        }
+        let share: @Sendable (SharePrompt) async -> Bool = { [weak self] prompt in
+            guard let self else { return false }
+            return await self.waitForShare(prompt, exchange)
+        }
+        let task = Task { await work(gate, exchange, consent, share) }
+        callerTasks[exchange] = task
+        let returned = await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+        callerTasks[exchange] = nil
+        let answer = dropIfStopped(returned, exchange)
+        liveExchanges.remove(exchange)
+        // A card nobody answered (the caller gave up) stops waiting on the owner.
+        endWaits(exchange)
+        if deferShared, answer.outcome == .answered {
+            awaitingDelivery[exchange] = message.id
+            return answer
+        }
+        post(answer, in: message.id)
+        return answer
+    }
+
+    /// The card's outcome, shown in the chat and Activity.
+    private func post(_ answer: GateAnswerCard, in messageID: UUID) {
+        guard canWrite() else { return }
+        if let index = thread.messages.firstIndex(where: { $0.id == messageID }) {
+            thread.messages[index].parts = [.gateAnswer(answer)]
+        } else {
+            thread.append(Message(author: .bot(BotSpec.kemoSabeID), parts: [.gateAnswer(answer)]))
+        }
+        events.append(.answered(answer.exchange, answer.outcome))
+        onActivity?(.gate(answer, botID: nil, threadID: thread.id))
+        changed()
+    }
+
+    /// Ends a released reply (`release`): handed over, it's shown as shared; not (the caller was revoked or gave up
+    /// after KemoSabe released it), KemoSabe is told it wasn't delivered (its journal and store), and it's shown as
+    /// not sent. Only once; a card that wasn't shared was shown already.
+    public func finishRelease(_ card: GateAnswerCard, delivered: Bool) {
+        guard canWrite() else { return }
+        guard let messageID = awaitingDelivery.removeValue(forKey: card.exchange) else { return }
+        if delivered {
+            post(card, in: messageID)
+        } else {
+            gate.undelivered(card.exchange)
+            post(GateAnswerCard(exchange: card.exchange, askerName: card.askerName, question: card.question, outcome: .unavailable, device: card.device),
+                 in: messageID)
+        }
+    }
+
+    /// Why an outside caller's task has no reply.
+    public struct RelayFailure: Error, Hashable, Sendable {
+        public let message: String
+        public init(_ message: String) { self.message = message }
+    }
+
+    /// Runs an outside caller's task on one bot in this chat, isolated: the bot gets only the task (no history,
+    /// no saved engine session, no references, no tools, no KemoSabe), and a coding agent never runs. Meant
+    /// for a throwaway session the host makes for one task. Cancelling stops the bot's turn.
+    public func runIsolated(_ task: String, from caller: KemoSabeCaller, on botID: UUID) async -> Result<String, RelayFailure> {
+        guard canWrite() else { return .failure(RelayFailure("Tsukumo is recovering its saved chats. Try again once it finishes.")) }
+        guard let bot = bot(botID), !bot.isKemoSabe else { return .failure(RelayFailure("There’s no bot by that name here.")) }
+        guard !bot.engine.runsOnlyOnMac else { return .failure(RelayFailure("\(bot.name) runs a coding agent, so it doesn’t take tasks from \(caller.name).")) }
+        guard working[botID] == nil else { return .failure(RelayFailure("\(bot.name) is busy. Try again in a moment.")) }
+        let text = "A task from \(caller.name), an assistant outside Tsukumo. Work only from what it says:\n\n\(task)"
+        guard let message = thread.send(text, to: [botID]) else { return .failure(RelayFailure("\(bot.name) couldn’t take it.")) }
+        isolatedMessages.insert(message.id)
+        startTurns(for: message)
+        let turn = turns[botID]
+        await withTaskCancellationHandler {
+            await turn?.value
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.stopAll() }
+        }
+        isolatedMessages.remove(message.id)
+        if Task.isCancelled { return .failure(RelayFailure("\(bot.name) stopped: the task ran out of time.")) }
+        guard let start = thread.messages.firstIndex(where: { $0.id == message.id }) else { return .failure(RelayFailure("\(bot.name) didn’t reply.")) }
+        var reply: String?, problem: String?
+        for later in thread.messages[(start + 1)...] where later.author == .bot(botID) {
+            for part in later.parts {
+                if case .text(let text) = part { reply = text }
+                if case .status(let line) = part { problem = line }
+            }
+        }
+        if let reply { return .success(reply) }
+        return .failure(RelayFailure(problem ?? "\(bot.name) finished without a reply."))
+    }
+
+    /// A line for the owner in this chat (an outside caller's task, recorded where the owner looks). Bots never
+    /// see it: a bot's history is only the owner's messages to it and its own replies.
+    public func note(_ line: String) {
+        guard canWrite() else { return }
+        thread.append(Message(author: .system, parts: [.status(line)]))
+        changed()
+    }
+
+    /// Waits for the owner's answer on this exchange's consent card. An exchange that already ended gets no card
+    /// and no wait: its answer is no at once (and the adapter drops it, since nothing asks any more).
     private func waitForConsent(_ exchange: GateExchangeID) async -> ConsentChoice {
+        // An exchange that ended (stopped, answered) gets no card: it's withdrawn from KemoSabe first, so the no
+        // that follows decides nothing.
+        guard liveExchanges.contains(exchange) else { gate.withdraw(exchange); return .deny }
         setQuestionState(exchange, .needsConsent)
         events.append(.needsConsent(exchange))
-        let choice = await withCheckedContinuation { continuation in consents[exchange] = continuation }
-        setQuestionState(exchange, .reading)
+        let choice = await withCheckedContinuation { continuation in consents[exchange, default: []].append(continuation) }
+        if liveExchanges.contains(exchange) { setQuestionState(exchange, .reading) }
         return choice
     }
 
-    /// The owner's answer on a consent card.
+    /// The owner's answer on a consent card. Only the first answer for an exchange counts.
     public func decide(_ choice: ConsentChoice, for exchange: GateExchangeID) {
-        guard let continuation = consents.removeValue(forKey: exchange) else { return }
-        continuation.resume(returning: choice)
+        guard canWrite() else { return }
+        for continuation in consents.removeValue(forKey: exchange) ?? [] { continuation.resume(returning: choice) }
     }
     /// Whether the card for `exchange` waits on the owner.
-    public func needsConsent(_ exchange: GateExchangeID) -> Bool { consents[exchange] != nil }
+    public func needsConsent(_ exchange: GateExchangeID) -> Bool { consents[exchange]?.isEmpty == false }
 
     private func waitForShare(_ prompt: SharePrompt, _ exchange: GateExchangeID) async -> Bool {
+        guard liveExchanges.contains(exchange) else { gate.withdraw(exchange); return false }
         sharePrompts[exchange] = prompt
         events.append(.needsShare(exchange))
-        let allow = await withCheckedContinuation { continuation in shareWaiters[exchange] = continuation }
+        let allow = await withCheckedContinuation { continuation in shareWaiters[exchange, default: []].append(continuation) }
         sharePrompts[exchange] = nil
         return allow
     }
-    /// The owner's answer on a share card: share this one Sensitive item, or not.
+    /// The owner's answer on a share card: share this one Sensitive item, or not. Only the first answer counts.
+    /// Released replies waiting for `finishRelease`: their card's message.
+    private var awaitingDelivery: [GateExchangeID: UUID] = [:]
+
     public func decideShare(_ allow: Bool, for exchange: GateExchangeID) {
-        guard let continuation = shareWaiters.removeValue(forKey: exchange) else { return }
-        continuation.resume(returning: allow)
+        guard canWrite() else { return }
+        for continuation in shareWaiters.removeValue(forKey: exchange) ?? [] { continuation.resume(returning: allow) }
     }
 
+    /// What came back for an exchange this chat stopped (or for a cancelled asker) is dropped: no answer is shown or
+    /// returned, and KemoSabe is told it wasn't delivered, so its journal never says "shared" for it.
+    private func dropIfStopped(_ card: GateAnswerCard, _ exchange: GateExchangeID) -> GateAnswerCard {
+        let stopped = stoppedExchanges.remove(exchange) != nil || Task.isCancelled
+        guard stopped else { return card }
+        // Its asker stopped: an answer that came back wasn't delivered, and a question left waiting on the owner was
+        // withdrawn. The journal says so.
+        gate.undelivered(exchange)
+        guard card.outcome == .answered else { return card }
+        return GateAnswerCard(exchange: exchange, askerName: card.askerName, question: card.question, outcome: .unavailable, device: card.device)
+    }
+
+    /// The exchange is over: every wait on its cards is resumed (no, and don't share), exactly once, and removed.
+    /// The adapter drops these answers, because nothing asks for this exchange any more.
+    private func endWaits(_ exchange: GateExchangeID) {
+        for continuation in consents.removeValue(forKey: exchange) ?? [] { continuation.resume(returning: .deny) }
+        for continuation in shareWaiters.removeValue(forKey: exchange) ?? [] { continuation.resume(returning: false) }
+        sharePrompts[exchange] = nil
+    }
+
+    /// Waits on cards not yet resumed (tests).
+    var openWaits: Int { consents.values.reduce(0) { $0 + $1.count } + shareWaiters.values.reduce(0) { $0 + $1.count } }
+
     private func setQuestionState(_ exchange: GateExchangeID, _ state: GateQuestionCard.State) {
+        guard canWrite() else { return }
         for index in thread.messages.indices {
             for (partIndex, part) in thread.messages[index].parts.enumerated() {
                 if case .gateQuestion(var card) = part, card.exchange == exchange {

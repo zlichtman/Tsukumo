@@ -44,6 +44,9 @@ public actor DisclosureDesk {
         return entry.text
     }
 
+    /// Destroys an envelope unopened (its asker stopped): the answer is gone.
+    public func discard(_ envelope: DisclosureEnvelope) { sealed[envelope.token] = nil }
+
     /// Envelopes sealed and not yet opened (expired ones are dropped).
     public func pendingCount() -> Int {
         let now = clock()

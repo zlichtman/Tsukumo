@@ -2,6 +2,7 @@ import SwiftUI
 import TsukumoCore
 import TsukumoUI
 import TsukumoEngines
+import TsukumoVoice
 
 @main
 struct TsukumoApp: App {
@@ -14,7 +15,9 @@ struct TsukumoApp: App {
             : AppModel.defaultFolder
         // UI tests keep their API keys apart from the owner's.
         let keys = KeychainAPIKeys(service: launch.uiTesting ? "com.zlichtman.tsukumo.api-keys.ui-testing" : "com.zlichtman.tsukumo.api-keys")
-        _model = State(initialValue: AppModel(folder: folder, keys: keys, launch: launch))
+        // System One's hosted models' keys: this iPhone's Keychain only, apart from the API keys.
+        let systemOneKeys = KeychainAPIKeys(service: launch.uiTesting ? "com.zlichtman.tsukumo.system-one-keys.ui-testing" : "com.zlichtman.tsukumo.system-one-keys")
+        _model = State(initialValue: AppModel(folder: folder, keys: keys, systemOneKeys: systemOneKeys, launch: launch))
     }
 
     var body: some Scene {
@@ -30,6 +33,7 @@ struct TsukumoApp: App {
             }
             .environment(model)
             .environment(\.engineInfo, model.engineInfo)
+            .environment(\.voice, model.voice)
             .preferredColorScheme(model.launch.appearance == "dark" ? .dark : model.launch.appearance == "light" ? .light : nil)
         }
     }
@@ -40,7 +44,7 @@ struct TsukumoApp: App {
 /// top right.
 struct RootView: View {
     enum Sheet: String, Identifiable {
-        case settings, activity, createBot
+        case settings, activity
         var id: String { rawValue }
     }
     @Environment(AppModel.self) private var model
@@ -53,7 +57,7 @@ struct RootView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
-                ChatScreen(session: model.session, onCreateBot: { sheet = .createBot }) {
+                ChatScreen(session: model.session) {
                     HeaderButton("Your chats", systemImage: "sidebar.leading") { setDrawer(true) }
                         .accessibilityIdentifier("openDrawer")
                 } trailing: {
@@ -95,11 +99,6 @@ struct RootView: View {
             switch sheet {
             case .settings: SettingsScreen()
             case .activity: ActivityScreen()
-            case .createBot:
-                BotEditor(existing: model.bots, engines: model.engineChoices, seed: model.launch.uiTesting ? 7 : nil) { bot in
-                    model.save(bot: bot)
-                    self.sheet = nil
-                } onCancel: { self.sheet = nil }
             }
         }
         .onAppear {
@@ -109,7 +108,6 @@ struct RootView: View {
             case "drawer": drawerOpen = true
             default: break
             }
-            if model.launch.createBot { sheet = .createBot }
             if model.launch.demo == .play || model.launch.demo == .consent, !played {
                 played = true
                 Task { await DemoFixture.play(model.session, pace: model.launch.pace) }
@@ -117,7 +115,9 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             // Back in the app: catch up with the owner's other devices.
-            if phase == .active { model.sync.syncSoon(after: 0) }
+            if phase == .active { model.sync.syncSoon(after: 0); model.voice?.resumeBetterModels() }
+            // Leaving the app stops listening and speaking.
+            if phase == .background { model.voice?.listener?.cancel(); model.voice?.stopSpeaking() }
         }
         .task { await model.accounts.checkAppleCredential() }
         .alert("Something went wrong", isPresented: Binding(get: { model.problem != nil }, set: { if !$0 { model.problem = nil } })) {

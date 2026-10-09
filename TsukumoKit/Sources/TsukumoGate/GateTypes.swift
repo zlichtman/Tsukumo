@@ -92,7 +92,8 @@ public struct PersonalItem: Hashable, Sendable {
     public var policyItem: PolicyItem { PolicyItem(id: id, label: label) }
 }
 
-/// Where answers come from: Messages, Calendar, Reminders, Contacts, Location. Each labels its own
+/// Where answers come from: Calendar, Reminders, Contacts, Messages, Photos, picked files, Location, Music,
+/// connected accounts (`SourceLibrary`). Each labels its own
 /// items; the Gate decides what may be read.
 public protocol PersonalSource: Sendable {
     func items(matching question: GateQuestion) async -> [PersonalItem]
@@ -142,6 +143,11 @@ enum PersonalNouns {
         case .credential: return one ? "secure note" : "secure notes"
         case .note: return one ? "note" : "notes"
         case .health: return one ? "health item" : "health items"
+        case .email: return one ? "email" : "emails"
+        case .photo: return one ? "photo record" : "photo records"
+        case .document: return one ? "file" : "files"
+        case .music: return "listening history"
+        case .connector: return one ? "connected account result" : "connected account results"
         default: return one ? "item" : "items"
         }
     }

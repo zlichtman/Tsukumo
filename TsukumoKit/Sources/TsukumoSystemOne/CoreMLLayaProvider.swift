@@ -41,7 +41,7 @@ public actor CoreMLLayaProvider: DecisionProvider {
     }
 
     /// Compiled once: a `model.mlpackage` becomes `model.mlmodelc` beside it, and the package is removed.
-    static func compiledModel(in directory: URL) async throws -> URL {
+    public static func compiledModel(in directory: URL) async throws -> URL {
         let files = FileManager.default
         let compiled = directory.appendingPathComponent("model.mlmodelc")
         if files.fileExists(atPath: compiled.path) { return compiled }

@@ -1,0 +1,7 @@
+# Tsukumo's Dock 2.02 (build 202)
+
+October 3, 2026. Voice: click a bot to talk to it, and it answers in its own voice (Whisper and Kokoro on the GPU after one download consent, Apple's recognizer and voices until then). System One decides who answers an untagged message: Laya on this Mac, then the hosted models turned on (Cloudflare Clef-flash and Clef, Jev, or a custom endpoint), then the bot last talked to. What KemoSabe may read is a catalog of sources; the Dock page shows a live preview with a dock color; a new Account page. iCloud and Sign in with Apple stay off in this build (`TSUKUMO_CAPABILITIES=Local`).
+
+- **Where:** the owner's website only: `https://zlichtman.com/downloads/Tsukumo-Dock-2.02.dmg`, with `/downloads/Tsukumo.dmg` and the old 2.00 and 2.01 links redirecting to it. 2.01 was taken down. Homebrew wasn't updated; the `tsukumo` cask stays disabled.
+- **DMG:** 21,220,607 bytes, SHA-256 `f1e22a6570238bfca0ab2e2958523a66b9de314b8cfb16244da54887aa1797f5`, notarized (app: ba81b76f-4894-42f9-baec-a32d489ada4b, DMG: 3d746a0e-6ab5-43fd-a3b7-cb954ee5c6b3), stapled, accepted by Gatekeeper as Notarized Developer ID. Larger than 2.01 because it carries MLX for voice and Laya.
+- **How:** `scripts/release-mac.sh 202 --dry-run` built, tested (316 TsukumoKit tests), notarized, and checked it; the DMG was placed on the site by hand, since the script's publish step also updates Homebrew.

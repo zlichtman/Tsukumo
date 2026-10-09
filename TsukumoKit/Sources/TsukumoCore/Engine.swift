@@ -1,8 +1,8 @@
 import Foundation
 
 /// What runs a bot. Saved as one string ("apple-on-device", "api:<profile UUID>",
-/// "coding:claude-code", "acp:<id>", "mlx:<model>"), so an engine a newer build added decodes as
-/// `.unknown` and survives a round trip instead of failing the whole bot.
+/// "coding:claude-code", "acp:<id>", "mlx:<model>", "service:<id>"), so an engine a newer build added
+/// decodes as `.unknown` and survives a round trip instead of failing the whole bot.
 public enum EngineID: Hashable, Codable, Sendable, CustomStringConvertible {
     /// Apple's on-device model: KemoSabe. Nothing leaves the device.
     case appleOnDevice
@@ -14,6 +14,10 @@ public enum EngineID: Hashable, Codable, Sendable, CustomStringConvertible {
     case acp(String)
     /// A local open-weight model (later).
     case mlx(String)
+    /// A service connected from elsewhere (Grok, Muse, OpenClaw, ChatGPT, Claude.ai): it reaches KemoSabe as a caller
+    /// of the KemoSabe gateway. Only Muse also chats here (`chats`): the owner's message goes to their Muse chat over
+    /// the Mac's Muse link; the others never run a turn.
+    case service(String)
     /// Written by a newer build; kept as written.
     case unknown(String)
 
@@ -24,6 +28,7 @@ public enum EngineID: Hashable, Codable, Sendable, CustomStringConvertible {
         case .codingAgent(let id): "coding:" + id
         case .acp(let id): "acp:" + id
         case .mlx(let model): "mlx:" + model
+        case .service(let id): "service:" + id
         case .unknown(let raw): raw
         }
     }
@@ -36,17 +41,26 @@ public enum EngineID: Hashable, Codable, Sendable, CustomStringConvertible {
         else if let id = rest("coding:"), !id.isEmpty { self = .codingAgent(id) }
         else if let id = rest("acp:"), !id.isEmpty { self = .acp(id) }
         else if let model = rest("mlx:"), !model.isEmpty { self = .mlx(model) }
+        else if let id = rest("service:"), !id.isEmpty { self = .service(id) }
         else { self = .unknown(key) }
     }
     public init(from decoder: Decoder) throws { self.init(key: try decoder.singleValueContainer().decode(String.self)) }
     public func encode(to encoder: Encoder) throws { var c = encoder.singleValueContainer(); try c.encode(key) }
 
-    /// Coding agents and ACP agents run only on a Mac.
+    /// The paired Muse: the one connected service that chats, through the Mac's Muse link.
+    public static let muse = EngineID.service("muse")
+
+    /// Coding agents, ACP agents, and the paired Muse run only on a Mac.
     public var runsOnlyOnMac: Bool {
         switch self {
         case .codingAgent, .acp: true
-        default: false
+        default: self == .muse
         }
+    }
+    /// Whether a bot on this engine can chat (every engine but a service that only calls the gateway; Muse does).
+    public var chats: Bool {
+        if case .service = self { return self == .muse }
+        return true
     }
     /// Whether this engine keeps every word on the device.
     public var isOnDevice: Bool {

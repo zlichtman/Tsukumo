@@ -5,43 +5,36 @@ import TsukumoCore
 import TsukumoEngines
 import TsukumoGate
 import TsukumoPolicy
+import TsukumoSync
 import TsukumoUI
 import TsukumoDock
+import TsukumoMuse
+import TsukumoUpdate
+import TsukumoVoice
 
-// Settings (⌘,): a Mac Settings window with a sidebar. Its pages follow the iPhone's Settings, in the same
-// order and with the same names where they overlap (AGENTS.md rule 9): Account, Bots, Models, KemoSabe;
-// then what only a Mac has: the Dock, and General. Each control has one home (rule 11): the dock's look is
-// in Dock (its right-click menu keeps only where it sits, hiding, and magnification, like the Dock's own),
-// KemoSabe's color is in KemoSabe and in its own editor from Bots, and nothing chooses where the bots live:
-// Tsukumo on a Mac is the side dock.
+// Settings (⌘,): a Mac Settings window with a sidebar, in MacSpaces' design language on Tsukumo's palette
+// (the pieces are TsukumoDock's `SettingsPage`, `SettingsCard`, and `SettingsRow`). Its pages follow the
+// iPhone's Settings, in the same order and with the same names where they overlap (AGENTS.md rule 9):
+// Account, Bots, Models, KemoSabe; then what only a Mac has: the KemoSabe gateway, the Dock, and General. Each control has one
+// home (rule 11): the dock's look is in Dock (its right-click menu keeps only where it sits, hiding, and
+// magnification, like the Dock's own), KemoSabe's palette is in KemoSabe and in its own editor from Bots,
+// and nothing chooses where the bots live: Tsukumo on a Mac is the side dock.
 
-enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
-    case account, bots, models, kemoSabe, dock, general
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .account: "Account"
-        case .bots: "Bots"
-        case .models: "Models"
-        case .kemoSabe: "KemoSabe"
-        case .dock: "Dock"
-        case .general: "General"
-        }
-    }
-    var symbol: String {
-        switch self {
-        case .account: "person.crop.circle"
-        case .bots: "person.2"
-        case .models: "cpu"
-        case .kemoSabe: "lock.shield"
-        case .dock: "dock.rectangle"
-        case .general: "gearshape"
-        }
-    }
-}
+/// The pages, from the catalog both devices share (TsukumoUI's `SettingsCatalog`).
+typealias SettingsSection = SettingsCatalog.Page
 
 @MainActor @Observable final class SettingsState {
     var section: SettingsSection? = .account
+    /// The Models page's tab (LLM, System One, Voice).
+    var modelsPage: ModelsPane.Page = .llm
+    /// A System One decision model's page, when one is open ("laya", or a hosted model's id).
+    var systemOneDetail: String?
+    /// A bot's page in Settings, Bots, when one is open.
+    var botPage: BotPage?
+    /// What's typed in Search.
+    var search = ""
+    /// The card a search result opened: its page scrolls to it and outlines it.
+    var searchTarget: String?
 }
 
 /// The Settings window.
@@ -50,16 +43,21 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
     let state = SettingsState()
 
     init(app: TsukumoDelegate) {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 580),
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 880, height: 640),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = SettingsSection.account.title
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
-        window.contentMinSize = NSSize(width: 700, height: 480)
+        window.contentMinSize = NSSize(width: 720, height: 520)
         let window = self.window
-        window.contentViewController = NSHostingController(rootView: SettingsView(app: app, state: state) { window.title = $0.title })
-        window.setContentSize(NSSize(width: 780, height: 580))
+        let host = NSHostingView(rootView: SettingsView(app: app, state: state) { window.title = $0.title })
+        // The window owns its size, not SwiftUI's ideal size while a page changes.
+        host.sizingOptions = []
+        host.autoresizingMask = [.width, .height]
+        window.contentView = host
+        window.setContentSize(NSSize(width: 880, height: 640))
         window.center()
     }
 
@@ -72,272 +70,355 @@ enum SettingsSection: String, CaseIterable, Identifiable, Sendable {
 }
 
 struct SettingsView: View {
+    /// DEBUG `--capture` is saving pictures.
+    nonisolated(unsafe) static var capturing = false
     let app: TsukumoDelegate
     @Bindable var state: SettingsState
     /// The page changed (the window's title follows, for the Window menu and Mission Control).
     var changed: (SettingsSection) -> Void = { _ in }
+    @Environment(\.colorScheme) private var scheme
+    @State private var resultIndex = 0
+    @State private var compactSearch = false
+    @FocusState private var searchFocused: Bool
+    private var results: [SettingsCatalog.Topic] { SettingsCatalog.search(state.search, on: .mac) }
+    private var searching: Bool { !state.search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var engineInfo: @Sendable (EngineID) -> EngineInfo {
         if let dock = app.dock { return dock.engineInfo }
         return { EngineInfo.standard($0) }
     }
 
+    /// Fills the window it's given; below 720 points wide the sidebar shrinks to its icons.
     var body: some View {
+        let colors = SettingsColors(scheme)
         let section = state.section ?? .account
-        HStack(spacing: 0) {
-            SettingsSidebar(selection: $state.section)
-                .frame(width: 200)
-            Divider()
-            VStack(alignment: .leading, spacing: 0) {
-                Text(section.title).font(.title3.weight(.semibold))
-                    .padding(.horizontal, 20).frame(height: 52, alignment: .center)
-                    .accessibilityAddTraits(.isHeader)
-                Divider()
-                Group {
+        GeometryReader { proxy in
+            let compact = proxy.size.width < 720
+            HStack(spacing: 0) {
+                SettingsSidebar(selection: $state.section, compact: compact, opened: { state.search = ""; state.searchTarget = nil; compactSearch = false }) {
+                    if compact {
+                        Button { compactSearch = true } label: { Image(systemName: "magnifyingglass").frame(maxWidth: .infinity, minHeight: 30) }
+                            .buttonStyle(.plain).accessibilityLabel("Search settings")
+                            .popover(isPresented: $compactSearch) { searchField.frame(width: 240).padding(12).onAppear { searchFocused = true } }
+                    } else { searchField }
+                }
+                .frame(width: compact ? 60 : 214)
+                Rectangle().fill(colors.border).frame(width: 1).ignoresSafeArea()
+                Group { if searching { searchResults } else { page(section) } }
+                .sheet(item: $state.botPage) { page in
+                    if let dock = app.dock { BotPageSheet(app: app, dock: dock, page: page) { state.botPage = nil } }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .environment(\.engineInfo, engineInfo)
+                .environment(\.codexPets, app.dock?.pets ?? [])
+                .environment(\.voice, app.voice)
+                .environment(\.settingsSearchTarget, state.searchTarget)
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+        }
+        .background(colors.surface)
+        .foregroundStyle(colors.ink)
+        .tint(colors.accent)
+        .frame(minWidth: 600, minHeight: 480)
+        // `--capture` draws windows as AppKit does, which can't draw live Liquid Glass: the dock's glass draws its stand-in.
+        .environment(\.dockGlassFallback, SettingsView.capturing)
+        // ⌘F: Search.
+        .background {
+            Button { compactSearch = true; searchFocused = true } label: { EmptyView() }
+                .keyboardShortcut("f", modifiers: .command).frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
+        }
+        .onChange(of: state.search) { _, _ in resultIndex = 0 }
+        .onChange(of: state.section) { _, section in changed(section ?? .account) }
+    }
+
+    /// Search, as MacSpaces has it: a capsule under Tsukumo's name; its results fill the page, ↑ and ↓ move, Return
+    /// opens one, Esc clears.
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Search settings", text: $state.search)
+                .textFieldStyle(.plain)
+                .focused($searchFocused)
+                .accessibilityLabel("Search settings")
+                .accessibilityIdentifier("settingsSearch")
+                .tint(Color.primary)
+                .onSubmit { if results.indices.contains(resultIndex) { open(results[resultIndex]) } }
+                .onKeyPress(.downArrow) { resultIndex = min(max(0, results.count - 1), resultIndex + 1); return .handled }
+                .onKeyPress(.upArrow) { resultIndex = max(0, resultIndex - 1); return .handled }
+                .onKeyPress(.escape) { state.search = ""; searchFocused = false; compactSearch = false; return .handled }
+            if !state.search.isEmpty {
+                Button { state.search = ""; state.searchTarget = nil } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                    .buttonStyle(.plain).accessibilityLabel("Clear search")
+            }
+        }
+        .font(.system(size: 13))
+        .padding(.horizontal, 12).frame(height: 34)
+        .background(Color.primary.opacity(searchFocused ? 0.09 : 0.06), in: Capsule())
+        .overlay { Capsule().strokeBorder(Color.primary.opacity(searchFocused ? 0.18 : 0), lineWidth: 1) }
+    }
+
+    private var searchResults: some View {
+        let colors = SettingsColors(scheme)
+        return SettingsPage(title: "Search", subtitle: "\(results.count) matching setting\(results.count == 1 ? "" : "s")",
+                            scrollAnchor: results.indices.contains(resultIndex) ? "search." + results[resultIndex].id : nil) {
+            if results.isEmpty {
+                ContentUnavailableView.search(text: state.search)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(results.indices, id: \.self) { index in
+                        let result = results[index]
+                        Button { open(result) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: result.page.symbol).frame(width: 22).foregroundStyle(colors.accent)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(result.title).font(.system(size: 14, weight: .semibold))
+                                    Text(result.location).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(12).contentShape(Rectangle())
+                            .background(index == resultIndex ? colors.selected : colors.tile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                        }
+                        .buttonStyle(.plain).id("search." + result.id)
+                        .accessibilityLabel(result.title + ", in " + result.location)
+                        .accessibilityIdentifier("settingsResult-" + result.id)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func page(_ section: SettingsSection) -> some View {
+                SettingsPage(title: section.title, subtitle: section.subtitle) {
                     if let dock = app.dock {
                         switch section {
                         case .account: AccountPane(app: app)
-                        case .bots: BotsPane(dock: dock)
-                        case .models: ModelsPane(app: app, dock: dock)
-                        case .kemoSabe: KemoSabePane(app: app, dock: dock)
-                        case .dock: Form { BotDockSettingsView(dock: dock) }.formStyle(.grouped)
+                        case .bots: BotsPane(app: app, dock: dock, state: state)
+                        case .models: ModelsPane(app: app, dock: dock, page: $state.modelsPage, systemOneDetail: $state.systemOneDetail,
+                                                 openService: { state.botPage = .service($0) })
+                        case .connections: SourcesCard(library: app.sources)
+                        case .gateway: if let gateway = app.gateway { GatewayPane(gateway: gateway, review: { app.showSignIn($0) },
+                                                                       binding: { dock.store.binding(forCaller: $0)?.service },
+                                                                       bind: { caller, service, transport in dock.bind(caller: caller, to: service, transport: transport); app.refreshServices() },
+                                                                       identity: { dock.identityLine(for: $0) }) } else { SettingsNote("The gateway isn’t available in the demo.") }
+                        case .dock: BotDockSettingsView(dock: dock)
                         case .general: GeneralPane(app: app)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .environment(\.engineInfo, engineInfo)
-            }
-        }
-        .ignoresSafeArea(.container, edges: .top)
-        .frame(minWidth: 700, minHeight: 480)
-        .onChange(of: state.section) { _, section in changed(section ?? .account) }
+                .id(section)
+    }
+
+    /// A search result: its page, Models' tab, or a bot's own page under Bots, scrolled to its card.
+    private func open(_ topic: SettingsCatalog.Topic) {
+        state.search = ""; compactSearch = false; searchFocused = false
+        if let tab = topic.tab { state.modelsPage = tab }
+        if topic.kemoSabeBot { state.botPage = .kemoSabe } else if let service = topic.service { state.botPage = .service(service) }
+        if topic.newBot { app.controller?.open(.addBot) }
+        state.searchTarget = topic.title
+        state.section = topic.page
     }
 }
 
-/// The pages, down the left like System Settings: each with its icon on a colored tile.
-struct SettingsSidebar: View {
+/// The pages down the left, as MacSpaces has them: Tsukumo's icon and name on top, then each page's
+/// plain symbol and name. The page you're on has a soft gray fill with a thin coral bar at its edge.
+struct SettingsSidebar<Search: View>: View {
     @Binding var selection: SettingsSection?
+    var compact = false
+    /// A page was chosen here (Search clears).
+    var opened: () -> Void = {}
+    /// Search, under Tsukumo's name.
+    @ViewBuilder var search: Search
+    @State private var hovered: SettingsSection?
     @Environment(\.colorScheme) private var scheme
 
-    private func tile(_ section: SettingsSection) -> Color {
-        switch section {
-        case .account: .blue
-        case .bots: .orange
-        case .models: .purple
-        case .kemoSabe: Color(red: 0.94, green: 0.44, blue: 0.36)
-        case .dock: .teal
-        case .general: .gray
+    var body: some View {
+        let colors = SettingsColors(scheme)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                TsukumoAppIcon(size: compact ? 30 : 34)
+                if !compact {
+                    Text("Tsukumo").font(.system(size: 15, weight: .bold))
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, compact ? 15 : 16)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
+
+            search
+                .padding(.horizontal, compact ? 8 : 10).padding(.bottom, 12)
+
+            VStack(spacing: 3) {
+                ForEach(SettingsSection.pages(on: .mac)) { item(for: $0, colors: colors) }
+            }
+            .padding(.horizontal, compact ? 8 : 10)
+            Spacer(minLength: 14)
         }
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(colors.tile)
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Color.clear.frame(height: 44)   // under the window's buttons
-            ForEach(SettingsSection.allCases) { section in
-                let selected = (selection ?? .account) == section
-                Button { selection = section } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: section.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
-                            .frame(width: 22, height: 22)
-                            .background(tile(section).gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        Text(section.title).font(.system(size: 13))
-                            .foregroundStyle(selected ? Color.white : Color.primary)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(selected ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                    .contentShape(Rectangle())
+    private func item(for section: SettingsSection, colors: SettingsColors) -> some View {
+        let selected = (selection ?? .account) == section
+        return Button { opened(); selection = section } label: {
+            HStack(spacing: 10) {
+                Image(systemName: section.symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(selected ? colors.accent : colors.ink.opacity(0.65))
+                    .frame(width: 19)
+                if !compact {
+                    Text(section.title).font(.system(size: 13, weight: selected ? .semibold : .medium))
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("settings-" + section.rawValue)
-                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
-            Spacer()
+            .frame(maxWidth: compact ? .infinity : nil)
+            .padding(.horizontal, compact ? 0 : 10)
+            .frame(height: 34)
+            .contentShape(Rectangle())
+            .background(selected ? colors.selected : hovered == section ? colors.hover : .clear,
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(alignment: .leading) {
+                if selected { Capsule().fill(colors.accent).frame(width: 2, height: 16).offset(x: -1) }
+            }
         }
-        .padding(.horizontal, 10)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .underPageBackgroundColor).opacity(scheme == .dark ? 0.6 : 0.5))
+        .buttonStyle(.plain)
+        .onHover { inside in hovered = inside ? section : (hovered == section ? nil : hovered) }
+        .help(compact ? section.title : "")
+        .accessibilityLabel(section.title)
+        .accessibilityIdentifier("settings-" + section.rawValue)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// Tsukumo's app icon, rounded like a Dock icon.
+struct TsukumoAppIcon: View {
+    let size: CGFloat
+    var body: some View {
+        Image(nsImage: NSImage(named: "AppIcon") ?? NSApp.applicationIconImage)
+            .resizable()
+            .interpolation(.high)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
+            .frame(width: size, height: size)
+            .shadow(color: .black.opacity(0.22), radius: size * 0.12, y: size * 0.06)
+            .accessibilityHidden(true)
     }
 }
 
 // MARK: Account
 
+/// Signed out: a centered hero (KemoSabe's cloud in its palette, one headline, one line, Sign in with Apple);
+/// signed in: the name with its initials, sync's pill, and Sign Out. Then what syncs and what never leaves,
+/// once, as two short columns.
 struct AccountPane: View {
     let app: TsukumoDelegate
     var body: some View {
         let state = app.sync?.state ?? .noAccount
-        Form {
-            Section {
-                AccountSummary(accounts: app.accounts, syncTitle: state.title, syncDetail: state.detail, syncOn: state.isOn,
-                               fixtureSignIn: app.fixtureSignIn, device: "Mac")
-            } footer: {
-                Text(app.accounts.isSignedIn
-                     ? "Signing out keeps your bots and chats on this Mac and stops syncing them. Your Apple ID is kept in this Mac’s Keychain only."
-                     : "Signing in keeps your bots and chats in step with your iPhone through your own iCloud. Your Apple ID is kept in this Mac’s Keychain only.")
-            }
-            Section("What syncs") {
-                Label("Your bots, how they look, and your chats", systemImage: "icloud")
-                Label("The default model, and connections without their keys", systemImage: "icloud")
-                Label("Never: API keys, KemoSabe’s answers, its journal and permissions, and chats you keep on one device", systemImage: "lock")
-            }
+        SettingsCard(app.accounts.isSignedIn ? "Your account" : "Sign in", systemImage: "person.crop.circle") {
+            AccountSummary(accounts: app.accounts, companion: app.dock?.bot(BotSpec.kemoSabeID) ?? .kemoSabe(), sync: state.account,
+                           fixtureSignIn: app.fixtureSignIn, device: "Mac")
         }
-        .formStyle(.grouped)
+        SettingsCard("What goes where", systemImage: "arrow.triangle.2.circlepath.icloud") {
+            SyncFacts(device: "Mac")
+        }
+    }
+}
+
+extension CloudSyncState {
+    /// The account page's view of it.
+    var account: AccountSync {
+        AccountSync(title: title, short: short, detail: detail,
+                    tone: isOn ? .on : isWaiting ? .waiting : self == .noAccount ? .off : .paused, lastSynced: lastSynced)
     }
 }
 
 // MARK: Bots
 
-struct BotsPane: View {
-    let dock: BotDock
-    private enum Editing: Identifiable { case new, bot(UUID); var id: String { if case .bot(let id) = self { id.uuidString } else { "new" } } }
-    @State private var editing: Editing?
-
-    var body: some View {
-        Form {
-            Section {
-                ForEach(Array(dock.bots.enumerated()), id: \.element.id) { index, bot in
-                    Button { editing = .bot(bot.id) } label: {
-                        HStack(spacing: 12) {
-                            BotAvatar(bot: bot, size: 32)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(bot.name).font(.body.weight(.medium))
-                                Text(dock.subtitle(bot.id)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                            Spacer()
-                            if bot.isKemoSabe {
-                                Circle().fill(bot.kemoSabeColor).frame(width: 14, height: 14).accessibilityLabel("Its color")
-                            }
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("settingsBot-" + (bot.isKemoSabe ? "kemosabe" : bot.name))
-                    .contextMenu {
-                        if !bot.isKemoSabe {
-                            Button("Move Up") { dock.move(bot.id, to: index - 1) }.disabled(index <= 1)
-                            Button("Move Down") { dock.move(bot.id, to: index + 1) }.disabled(index >= dock.bots.count - 1)
-                            Divider()
-                            Button("Remove \(bot.name)", role: .destructive) { dock.remove(bot.id) }
-                        }
-                    }
-                }
-                Button { editing = .new } label: { Label("Make a bot", systemImage: "plus") }
-                    .accessibilityIdentifier("settingsAddBot")
-            } header: {
-                Text("Your bots")
-            } footer: {
-                Text("KemoSabe is always here. It runs on this Mac and answers the other bots’ questions about you. Right-click a bot to move or remove it.")
-            }
-        }
-        .formStyle(.grouped)
-        .sheet(item: $editing) { target in
-            Group {
-                switch target {
-                case .new: DockBotForm(dock: dock, editing: nil, opensChat: false) { editing = nil }
-                case .bot(let id): DockBotForm(dock: dock, editing: dock.bot(id), opensChat: false) { editing = nil }
-                }
-            }
-            .frame(width: DockMetrics.form.width, height: DockMetrics.form.height)
-        }
-    }
-}
-
 // MARK: Models
 
 struct ModelsPane: View {
-    enum Page: String, CaseIterable, Identifiable {
-        case llm, systemOne
-        var id: String { rawValue }
-        var title: String { self == .llm ? "LLM" : "System One" }
-    }
+    typealias Page = SettingsCatalog.ModelsTab
     let app: TsukumoDelegate
     let dock: BotDock
-    @State private var page: Page = .llm
+    @Binding var page: Page
+    @Binding var systemOneDetail: String?
+    /// Opens a service's own page (its agent on this Mac, its key, how it connects).
+    var openService: (ServiceID) -> Void = { _ in }
     @State private var adding: ConnectionRecord.Provider?
     @State private var editing: ConnectionRecord?
 
     var body: some View {
-        Form {
-            Section {
-                Picker("Page", selection: $page) { ForEach(Page.allCases) { Text($0.title).tag($0) } }
-                    .pickerStyle(.segmented).labelsHidden()
-                    .accessibilityIdentifier("modelsPage")
+        Picker("Page", selection: $page) { ForEach(Page.allCases) { Text($0.title).tag($0) } }
+            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .accessibilityIdentifier("modelsPage")
+        Group {
+            switch page {
+            case .llm: llm
+            case .systemOne: systemOne
+            case .voice:
+                if let voice = app.voice { VoicePane(voice: voice, dock: dock) }
+                else { SettingsNote("Voice isn’t available in the demo.") }
             }
-            if page == .llm { llm } else { systemOne }
         }
-        .formStyle(.grouped)
         .sheet(item: $adding) { provider in ConnectionEditor(app: app, provider: provider, existing: nil) }
         .sheet(item: $editing) { record in ConnectionEditor(app: app, provider: record.provider, existing: record) }
     }
 
     @ViewBuilder private var llm: some View {
-        Section {
+        SettingsCard("On this Mac", systemImage: "apple.intelligence") {
             let status = app.appleIntelligence
-            LabeledContent {
-                Text(status.text).foregroundStyle(status.ready ? Color.secondary : Color.orange)
-            } label: {
-                Label("Apple on-device", systemImage: "apple.intelligence")
+            SettingsRow("Apple on-device", subtitle: status.text) {
+                EngineMarkView(.apple, size: 22).frame(width: 30, height: 30)
+            } trailing: {
+                Image(systemName: status.ready ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(status.ready ? Color.green : Color.orange)
             }
-        } header: {
-            Text("On this Mac")
-        } footer: {
-            Text("KemoSabe runs here, and so can any bot you make with Apple on-device. Nothing it reads leaves this Mac.")
+            SettingsNote("KemoSabe runs here. Nothing it reads leaves this Mac.")
         }
-        Section {
-            Picker("New bots start on", selection: Binding(get: { dock.store.defaultModel?.engine ?? .appleOnDevice }, set: { engine in
-                let record = app.connections.first { $0.engine == engine }
-                dock.store.setDefaultModel(DefaultModel(engine: engine, model: record?.connection.model))
-            })) {
-                ForEach(dock.engineChoices) { choice in Text(choice.info.title).tag(choice.engine) }
-            }
-            .accessibilityIdentifier("defaultModel")
-        } header: {
-            Text("Default")
-        } footer: {
-            Text("The model a new bot starts on. It follows you to your iPhone; keys don’t.")
-        }
-        Section {
-            ForEach(app.connections) { record in
-                Button { editing = record } label: {
-                    HStack(spacing: 12) {
-                        EngineMarkView(record.provider.mark, size: 22)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(record.name)
-                            Text(app.hasKey(record.id) || record.provider == .compatible ? "\(record.connection.model) · key on this Mac" : "No key yet")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+        SettingsCard("Coding agents", systemImage: "terminal") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array([ServiceID.claude, .codex, .cursor, .gemini].enumerated()), id: \.element) { index, service in
+                    if index > 0 { Divider() }
+                    let agent = app.installedAgent(service)
+                    Button { openService(service) } label: {
+                        SettingsRow(service == .claude ? "Claude Code" : service.title,
+                                    subtitle: agent.map { "Installed" + ($0.version.map { " · \($0)" } ?? "") } ?? "Not on this Mac") {
+                            ServiceMarkView(service, size: 30).opacity(agent == nil ? 0.6 : 1)
+                        } trailing: { SettingsChevron() }
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain).accessibilityIdentifier("codingAgent-" + service.rawValue)
                 }
-                .buttonStyle(.plain)
-                .contextMenu { Button("Remove \(record.name)", role: .destructive) { app.remove(connection: record.id) } }
             }
-            Menu {
-                ForEach(ConnectionRecord.Provider.allCases) { provider in
-                    Button(provider.title) { adding = provider }
+            SettingsNote("Bots run on these with your own sign-in, never Tsukumo’s. Tsukumo looks for them each time it opens.")
+        }
+        SettingsCard("API models", systemImage: "key") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(app.connections) { record in
+                    Button { editing = record } label: {
+                        SettingsRow(record.name, subtitle: app.hasKey(record.id) || record.provider == .compatible ? "\(record.connection.model) · key on this Mac" : "No key yet") {
+                            EngineMarkView(record.provider.mark, size: 22).frame(width: 30, height: 30)
+                        } trailing: { SettingsChevron() }
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu { Button("Remove \(record.name)", role: .destructive) { app.remove(connection: record.id) } }
+                    Divider()
                 }
-            } label: { Label("Connect an API model", systemImage: "plus") }
-                .fixedSize()
-                .accessibilityIdentifier("connectAPI")
-        } header: {
-            Text("API models")
-        } footer: {
-            Text("Keys stay in this Mac’s Keychain. They’re never synced or backed up. A connection made on your iPhone shows here without its key.")
+                Menu {
+                    ForEach([ConnectionRecord.Provider.anthropic, .openAI]) { provider in
+                        Button(provider.title) { adding = provider }
+                    }
+                } label: { Label("Connect an API model", systemImage: "plus") }
+                    .menuStyle(.borderlessButton).fixedSize()
+                    .accessibilityIdentifier("connectAPI")
+            }
+            SettingsNote("Bots made on a key run on it. Keys stay in this Mac’s Keychain; they’re never synced or backed up. A connection made on your iPhone shows here without its key.")
         }
     }
 
+    /// System One's tab is its own file (`SystemOneSettings.swift`).
     @ViewBuilder private var systemOne: some View {
-        Section {
-            LabeledContent("Routing", value: "The bot you last talked to")
-            LabeledContent("Laya", value: "Not on this Mac yet")
-        } header: {
-            Text("Untagged messages")
-        } footer: {
-            Text("When you don’t tag a bot, System One picks one only when it’s sure; otherwise your message goes to the bot you last talked to.")
-        }
+        if let center = app.systemOne { SystemOnePane(center: center, detail: $systemOneDetail) }
+        else { SettingsNote("System One isn’t available in the demo.") }
     }
 }
 
@@ -434,9 +515,11 @@ struct ConnectionEditor: View {
 
 // MARK: KemoSabe
 
-/// KemoSabe: its color, what it may read and how private each source is, the bots it answers, whether
-/// it chirps, and its journal.
-struct KemoSabePane: View {
+/// KemoSabe: the bots it answers, whether it chirps, and its journal. Its character, palette, and voice are on its page
+/// in Settings, Bots; what it may read is Settings, Connections.
+/// The rest of KemoSabe's page in Settings, Bots, below its character, palette, and voice: the bots it answers
+/// without asking, its chirps, and its journal, drawn like the page's other groups.
+struct KemoSabeMore: View {
     let app: TsukumoDelegate
     let dock: BotDock
     @State private var journal: [GateJournalEntry] = []
@@ -454,100 +537,76 @@ struct KemoSabePane: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                HStack(spacing: 14) {
-                    BotAvatar(bot: kemoSabe.wrappedValue, size: 44)
-                    KemoSabeColorPicker(bot: kemoSabe, size: 22)
-                }
-            } header: {
-                Text("Its color")
-            } footer: {
-                Text("KemoSabe is always the same: its cloud, its name, and Apple’s on-device model on this Mac. Its color is yours to pick: its card, ring, and buttons in your chats.")
-            }
-
-            Section {
-                ForEach(PersonalSourceKind.allCases) { source in
-                    let setting = app.setting(source)
-                    Toggle(isOn: Binding(get: { setting.on }, set: { on in Task { await app.set(source, on: on) } })) {
-                        Label(source.title, systemImage: source.symbol)
-                    }
-                    .accessibilityIdentifier("source-" + source.rawValue)
-                    if setting.on {
-                        Picker("How private", selection: Binding(get: { setting.level }, set: { level in Task { await app.set(source, level: level) } })) {
-                            ForEach(PrivacyLevel.allCases) { Text($0.title).tag($0) }
+        group("Allowed bots") {
+            if allowedBots.isEmpty {
+                note("The first time a bot asks KemoSabe something, you choose on its card in the chat.")
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(allowedBots.enumerated()), id: \.element.id) { index, bot in
+                        if index > 0 { Divider() }
+                        SettingsRow(bot.name, subtitle: "Answered without asking") {
+                            BotAvatar(bot: bot, size: 28, showsEngine: false)
+                        } trailing: {
+                            Button("Ask Again") { dock.gate?.revokeConsent(recipient(bot)) }
                         }
                     }
                 }
-            } header: {
-                Text("What KemoSabe may read")
-            } footer: {
-                Text("KemoSabe reads a source only on this Mac, and shares only the answer. Sensitive items ask you on a card each time. Device only never leaves this Mac. Secret is never read.")
+                note("Ask Again has KemoSabe ask you the next time that bot asks.")
             }
+        }
 
-            Section {
-                if allowedBots.isEmpty {
-                    Text("The first time a bot asks KemoSabe something, you choose on its card in the chat.").foregroundStyle(.secondary)
+        group("Chirps") {
+            Toggle("Chirps in about what’s coming up", isOn: Binding(get: { kemoSabe.wrappedValue.permissions.mayChirp }, set: { on in
+                var bot = kemoSabe.wrappedValue
+                bot.permissions.mayChirp = on
+                dock.update(bot)
+            }))
+            if kemoSabe.wrappedValue.permissions.mayChirp {
+                ForEach(DockChirpSource.allCases) { source in
+                    Toggle(source.title, isOn: Binding(get: { dock.store.chirpWatch(BotSpec.kemoSabeID).sources.contains(source) }, set: { on in
+                        var watch = dock.store.chirpWatch(BotSpec.kemoSabeID)
+                        watch.sources.removeAll { $0 == source }
+                        if on { watch.sources.append(source) }
+                        dock.store.setChirpWatch(watch, for: BotSpec.kemoSabeID)
+                    }))
+                    .padding(.leading, 20)
                 }
-                ForEach(allowedBots) { bot in
-                    HStack {
-                        BotAvatar(bot: bot, size: 26, showsEngine: false)
-                        Text(bot.name)
-                        Spacer()
-                        Button("Ask Again") { dock.gate?.revokeConsent(recipient(bot)) }
-                    }
-                }
-            } header: {
-                Text("Bots KemoSabe answers")
-            } footer: {
-                Text("Ask Again has KemoSabe ask you the next time that bot asks.")
             }
+            note("A speech bubble from KemoSabe on the dock. It reads Calendar and Reminders only when macOS allows Tsukumo to.")
+        }
 
-            Section {
-                Toggle("Chirps in about what’s coming up", isOn: Binding(get: { kemoSabe.wrappedValue.permissions.mayChirp }, set: { on in
-                    var bot = kemoSabe.wrappedValue
-                    bot.permissions.mayChirp = on
-                    dock.update(bot)
-                }))
-                if kemoSabe.wrappedValue.permissions.mayChirp {
-                    ForEach(DockChirpSource.allCases) { source in
-                        Toggle(source.title, isOn: Binding(get: { dock.store.chirpWatch(BotSpec.kemoSabeID).sources.contains(source) }, set: { on in
-                            var watch = dock.store.chirpWatch(BotSpec.kemoSabeID)
-                            watch.sources.removeAll { $0 == source }
-                            if on { watch.sources.append(source) }
-                            dock.store.setChirpWatch(watch, for: BotSpec.kemoSabeID)
-                        }))
-                        .padding(.leading, 18)
-                    }
-                }
-            } header: {
-                Text("Speaking up")
-            } footer: {
-                Text("A speech bubble from KemoSabe on the dock. It reads Calendar and Reminders only when macOS allows Tsukumo to.")
-            }
-
-            Section("Journal") {
-                if journal.isEmpty {
-                    Text("What KemoSabe tells your bots shows here: who asked, why, and exactly what was sent.").foregroundStyle(.secondary)
-                }
-                ForEach(journal.reversed()) { entry in
+        // The journal shows once KemoSabe has told a bot something.
+        Group { if !journal.isEmpty { group("Journal") {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(journal.reversed().enumerated()), id: \.element.id) { index, entry in
+                    if index > 0 { Divider() }
                     VStack(alignment: .leading, spacing: 3) {
                         HStack {
-                            Text(entry.requesterName).font(.subheadline.weight(.semibold))
+                            Text(entry.requesterName).font(.system(size: 13, weight: .semibold))
                             Spacer()
-                            Text(entry.decidedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
+                            Text(entry.decidedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.tertiary)
                         }
                         Text("“\(entry.question)”").font(.callout)
                         if !entry.purpose.isEmpty { Text("Why: " + entry.purpose).font(.caption).foregroundStyle(.secondary) }
                         Text(entry.shared.map { "Sent: “\($0)”" } ?? "Nothing was sent.").font(.caption).foregroundStyle(.secondary)
                         if let withheld = entry.withheld { Text(withheld).font(.caption).foregroundStyle(.secondary) }
                     }
-                    .padding(.vertical, 2)
                 }
             }
+        } } }
+        .task { journal = dock.gate?.journal.all() ?? [] }
+    }
+
+    private func group(_ title: String, @ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title).font(.system(size: 12, weight: .semibold))
+            content()
         }
-        .formStyle(.grouped)
-        .task { journal = await dock.gate?.journal.all() ?? [] }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+    private func note(_ text: String) -> some View {
+        Text(text).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -557,25 +616,28 @@ struct GeneralPane: View {
     let app: TsukumoDelegate
     var body: some View {
         let login = app.launchAtLogin
-        Form {
-            Section {
-                Toggle("Open at Login", isOn: Binding(get: { login.isOn }, set: { login.set($0) }))
-                    .accessibilityIdentifier("launchAtLogin")
-                if login.needsApproval {
-                    Text("Allow Tsukumo in System Settings, General, Login Items.").font(.caption).foregroundStyle(.orange)
-                }
-                if let problem = login.problem { Text(problem).font(.caption).foregroundStyle(.orange) }
-            } footer: {
-                Text("Your bots’ dock is there when you start your Mac.")
+        AppearanceCard()
+        SettingsCard("Startup", systemImage: "power") {
+            Toggle("Open at Login", isOn: Binding(get: { login.isOn }, set: { login.set($0) }))
+                .accessibilityIdentifier("launchAtLogin")
+            if login.needsApproval {
+                SettingsNote("Allow Tsukumo in System Settings, General, Login Items.", warning: true)
             }
-            Section {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-            }
-            if let problem = app.migrationProblem {
-                Section { Label(problem, systemImage: "exclamationmark.circle").foregroundStyle(.orange) }
-            }
+            if let problem = login.problem { SettingsNote(problem, warning: true) }
+            SettingsNote("Your bots’ dock is there when you start your Mac.")
         }
-        .formStyle(.grouped)
         .onAppear { login.refresh() }
+        SettingsCard("About", systemImage: "info.circle") {
+            HStack(spacing: 12) {
+                TsukumoAppIcon(size: 36)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Tsukumo " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""))
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Your bots’ side dock, with KemoSabe on this Mac.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if let problem = app.migrationProblem { SettingsNote(problem, warning: true) }
+        }
+        SoftwareUpdateCard(updates: app.updates)
     }
 }

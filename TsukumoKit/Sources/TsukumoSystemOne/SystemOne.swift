@@ -2,7 +2,7 @@ import Foundation
 import TsukumoCore
 import TsukumoPolicy
 
-/// Who made a decision: "laya", a hosted service's name ("jev"), or "fallback" (the caller's rules).
+/// Who made a decision: "laya", a hosted service's name ("clef-flash", "jev"), or "fallback" (the caller's rules).
 public struct DecisionSource: RawRepresentable, Hashable, Codable, Sendable, ExpressibleByStringLiteral, CustomStringConvertible {
     public let rawValue: String
     public init(rawValue: String) { self.rawValue = rawValue }
@@ -81,7 +81,7 @@ public actor DecisionJournal {
     public func all() -> [DecisionRecord] { records }
 }
 
-/// A hosted decision service asked after Laya (Jev today). Each is its own recipient; turning it on
+/// A hosted decision service asked after Laya (Clef-flash, Clef, Jev, or a custom endpoint). Each is its own recipient; turning it on
 /// is the owner's grant for Personal requests, and the policy decides each request before it leaves.
 public struct RemoteDecider: Sendable {
     public let source: DecisionSource
@@ -153,7 +153,12 @@ public enum SystemOne {
                 steps.append(DecisionStep(provider: .laya, version: local.modelVersion, score: nil, reason: .outOfDistribution, sentTo: nil, personal: false))
             } else {
                 do {
-                    let base = try await local.decide(request)
+                    // Raced against the deadline: a cold load (or a busy model) never holds a message up. With a
+                    // hosted model after it, Laya gets part of the time (2 of 5 seconds), so a stall still leaves
+                    // the hosted model room to answer.
+                    let remaining = request.deadline.timeIntervalSinceNow
+                    let budget = providers.remotes.isEmpty ? request.deadline : Date().addingTimeInterval(min(remaining, max(1.5, remaining * 0.4)))
+                    let base = try await withDeadline(budget) { try await local.decide(request) }
                     try base.validate(for: request)
                     for (index, answer) in base.answers.enumerated() where questions.indices.contains(index) { questions[index].laya = answer.probabilities }
                     var result = base, personal = false
@@ -179,7 +184,9 @@ public enum SystemOne {
             } else {
                 do {
                     // Only the packet: the request's words, the questions, and their choices.
-                    let result = try await remote.provider.decide(DecisionRequest(state: request.state, questions: request.questions, deadline: request.deadline))
+                    let packet = DecisionRequest(state: request.state, questions: request.questions, deadline: request.deadline)
+                    let provider = remote.provider
+                    let result = try await withDeadline(request.deadline) { try await provider.decide(packet) }
                     try result.validate(for: request)
                     let confident = result.abstention == nil && result.score >= kind.threshold
                     steps.append(DecisionStep(provider: remote.source, version: result.modelVersion, score: result.score,
@@ -201,5 +208,63 @@ public enum SystemOne {
                                                 milliseconds: Int(now().timeIntervalSince(started) * 1000), questions: questions))
         }
         return Decision(result: accepted?.result, decidedBy: decidedBy, steps: steps)
+    }
+}
+
+/// Runs `work`, but gives up at `deadline` with `DecisionError.unavailable`. The work isn't awaited past
+/// the deadline (Core ML prediction can't be cancelled, so a task group would wait for it): it's cancelled
+/// and left to finish on its own, and its late answer is dropped.
+func withDeadline<T: Sendable>(_ deadline: Date, _ work: @escaping @Sendable () async throws -> T) async throws -> T {
+    let remaining = deadline.timeIntervalSinceNow
+    guard remaining > 0 else { throw DecisionError.unavailable }
+    let race = DeadlineRace<T>()
+    return try await withTaskCancellationHandler {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+            race.start(continuation)
+            let worker = Task {
+                do { race.finish(.success(try await work())) } catch { race.finish(.failure(error)) }
+            }
+            let timer = Task {
+                try? await Task.sleep(for: .seconds(remaining))
+                if !Task.isCancelled { race.finish(.failure(DecisionError.unavailable)) }
+                worker.cancel()
+            }
+            race.onFinish { timer.cancel() }
+        }
+    } onCancel: {
+        race.finish(.failure(CancellationError()))
+    }
+}
+
+/// The first of the work, the timer, or a cancellation wins; the others are ignored.
+private final class DeadlineRace<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T, Error>?
+    private var early: Result<T, Error>?
+    private var done = false
+    private var cleanup: (@Sendable () -> Void)?
+
+    func start(_ continuation: CheckedContinuation<T, Error>) {
+        lock.lock()
+        if let early { lock.unlock(); continuation.resume(with: early); return }
+        self.continuation = continuation
+        lock.unlock()
+    }
+    func onFinish(_ cleanup: @escaping @Sendable () -> Void) {
+        lock.lock()
+        if done { lock.unlock(); cleanup(); return }
+        self.cleanup = cleanup
+        lock.unlock()
+    }
+    func finish(_ result: Result<T, Error>) {
+        lock.lock()
+        guard !done else { lock.unlock(); return }
+        done = true
+        let continuation = self.continuation, cleanup = self.cleanup
+        self.continuation = nil; self.cleanup = nil
+        if continuation == nil { early = result }
+        lock.unlock()
+        continuation?.resume(with: result)
+        cleanup?()
     }
 }

@@ -1,7 +1,9 @@
 #if os(macOS)
 import SwiftUI
 import TsukumoCore
+import TsukumoGateway
 import TsukumoUI
+import TsukumoVoice
 
 // A bot's chat on the Mac: TsukumoUI's chat (the same transcript, KemoSabe card, consent and share cards
 // as the iPhone app and the website demo) at Mac sizes (`ChatDensity.compact`), with a composer that fits
@@ -51,6 +53,7 @@ public struct DockChatPane: View {
         }
         .environment(\.chatDensity, .compact)
         .environment(\.engineInfo, dock.engineInfo)
+        .environment(\.codexPets, dock.pets)
         .foregroundStyle(TsukumoTheme(scheme).ink)
         .tint(TsukumoTheme(scheme).accent)
     }
@@ -74,11 +77,11 @@ struct DockChatEmpty: View {
                 Text("Together").font(.system(size: 14, weight: .semibold))
                 Text("Tag bots below, or type @name. Each answers in its own words.")
             } else if let bot = dock.bot(conversation) {
-                if bot.isKemoSabe { KemoSabeFigure().frame(width: 84, height: 84) }
-                else { ClayCharacter(look: bot.look, state: .idle).frame(width: 72, height: 72) }
+                if bot.isKemoSabe { KemoSabeFigure(bot: bot).frame(width: 84, height: 84) }
+                else { BotCharacterView(bot: bot, state: .idle, size: 60, animated: false).padding(.bottom, 4) }
                 Text(bot.isKemoSabe ? "Ask \(bot.name) anything" : "Message \(bot.name)").font(.system(size: 14, weight: .semibold))
                 Text(bot.isKemoSabe ? "It answers on this Mac. Nothing leaves it."
-                     : bot.role.isEmpty ? "It asks KemoSabe for anything personal, and only gets the answer." : bot.role)
+                     : "Runs on \(dock.engineInfo(bot.engine).title). It asks KemoSabe for anything personal, and only gets the answer.")
             }
         }
         .font(.system(size: 12))
@@ -95,6 +98,12 @@ struct DockComposer: View {
     let conversation: UUID
     @FocusState private var focused: Bool
     @Environment(\.colorScheme) private var scheme
+
+    /// This chat's microphone, while it listens.
+    private var listening: VoiceListener? {
+        guard let listener = dock.voice?.listener, listener.botID == nil, listener.phase.isLive else { return nil }
+        return listener
+    }
 
     var body: some View {
         content(TsukumoTheme(scheme))
@@ -122,14 +131,22 @@ struct DockComposer: View {
                     HStack(spacing: 5) { ForEach(session.threadBots) { chip($0, theme: theme) } }
                 }
             }
+            if let last = dock.voice?.lastListener, last.botID == nil, case .failed(let message) = last.phase {
+                Label(message, systemImage: "mic.slash").font(.system(size: 11)).foregroundStyle(theme.secondary)
+            }
             HStack(spacing: 8) {
-                TextField(session.placeholder, text: $session.draft, axis: .vertical)
-                    .lineLimit(1...4)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .focused($focused)
-                    .onSubmit(send)
-                    .accessibilityIdentifier("dockChatInput")
+                if let listening {
+                    ListeningStrip(listener: listening, compact: true)
+                } else {
+                    TextField(session.placeholder, text: $session.draft, axis: .vertical)
+                        .lineLimit(1...4)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .focused($focused)
+                        .onSubmit(send)
+                        .accessibilityIdentifier("dockChatInput")
+                }
+                if let voice = dock.voice { ComposerMicButton(session: session, voice: voice, size: 24) }
                 sendButton(theme)
             }
             .padding(.leading, 12).padding(.trailing, 5).padding(.vertical, 5)
@@ -180,7 +197,7 @@ struct DockComposer: View {
 
 // MARK: The bubble beside the side dock
 
-/// The panel beside the dock: a bot's chat, Together, or a bot's settings.
+/// The panel beside the dock: a bot's chat (or the panel plugged in for it), Together, or a bot's panel.
 public struct DockBubble: View {
     let dock: BotDock
     @Environment(\.colorScheme) private var scheme
@@ -192,11 +209,15 @@ public struct DockBubble: View {
         Group {
             switch dock.surface {
             case .bot(let id)?:
-                if let bot = dock.bot(id), let session = dock.session(id) { chat(bot: bot, session: session) } else { Color.clear }
+                if let bot = dock.bot(id), let session = dock.session(id) {
+                    if let plugged = plugged(bot, session: session) { pluggedIn(bot: bot, panel: plugged) } else { chat(bot: bot, session: session) }
+                } else { Color.clear }
             case .together?:
                 if let session = dock.session(BotDock.togetherID) { together(session) } else { Color.clear }
-            case .edit(let id)?:
-                DockBotForm(dock: dock, editing: id.flatMap { dock.bot($0) }) { dock.open(nil) }
+            case .panel(let id)?:
+                if let bot = dock.bot(id) { DockBotPanel(dock: dock, bot: bot) { dock.open(nil) } } else { Color.clear }
+            case .addBot?:
+                DockAddBot(dock: dock) { added in dock.open(added.map { .panel($0.id) }) }
             case nil:
                 Color.clear
             }
@@ -206,22 +227,47 @@ public struct DockBubble: View {
         .background { DockGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)) }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .environment(\.engineInfo, dock.engineInfo)
+        .environment(\.codexPets, dock.pets)
+        .environment(\.voice, dock.voice)
+    }
+
+    /// The panel plugged in for this bot's tile, if any (Tsukumo's Claude bot).
+    private func plugged(_ bot: BotSpec, session: ChatSession) -> AnyView? {
+        guard let provider = dock.panelProviders[bot.id] else { return nil }
+        return provider.panel(ServiceBotPanelContext(bot: bot, session: session, deviceName: "Mac") { dock.open(nil) })
+    }
+    private func pluggedIn(bot: BotSpec, panel: AnyView) -> some View {
+        VStack(spacing: 0) {
+            header(title: bot.name, subtitle: dock.subtitle(bot.id)) {
+                Button { dock.open(.panel(bot.id)) } label: { Image(systemName: "info.circle") }
+                    .buttonStyle(DockIconButtonStyle()).help(DockPanelWords.menuTitle(bot)).accessibilityLabel(DockPanelWords.menuTitle(bot))
+            } leading: {
+                BotAvatar(bot: bot, size: 30, state: dock.characterState(bot.id))
+            }
+            Divider().opacity(0.5)
+            panel
+        }
     }
 
     private func chat(bot: BotSpec, session: ChatSession) -> some View {
         VStack(spacing: 0) {
             header(title: bot.name, subtitle: dock.subtitle(bot.id)) {
+                // Its settings, one click away (and its page has Chat, back here).
+                Button { dock.open(.panel(bot.id)) } label: { Image(systemName: "gearshape") }
+                    .buttonStyle(DockIconButtonStyle()).help(DockPanelWords.menuTitle(bot)).accessibilityLabel(DockPanelWords.menuTitle(bot))
+                    .accessibilityIdentifier("dockChatSettings")
                 Menu {
-                    Button(bot.isKemoSabe ? "\(bot.name)’s Color…" : "Edit \(bot.name)…") { dock.open(.edit(bot.id)) }
                     Button("Clear conversation") { dock.clear(bot.id) }.disabled(session.isBusy)
-                    if !bot.isKemoSabe { Divider(); Button("Remove from dock", role: .destructive) { dock.remove(bot.id) } }
                 } label: { Image(systemName: "ellipsis") }
                     .menuStyle(.button).buttonStyle(DockIconButtonStyle()).menuIndicator(.hidden).fixedSize().accessibilityLabel("More")
             } leading: {
                 BotAvatar(bot: bot, size: 30, state: dock.characterState(bot.id))
             }
             Divider().opacity(0.5)
-            if let cue = dock.cues[bot.id] { DockWorkCard(cue: cue).padding(.horizontal, 12).padding(.top, 10) }
+            if let cue = dock.cue(for: bot.id) { DockWorkCard(cue: cue).padding(.horizontal, 12).padding(.top, 10) }
+            if bot.isKemoSabe, let gateway = dock.gateway {
+                GatewayRequestList(desk: gateway, identity: { dock.identityLine(for: $0) }).padding(.horizontal, 12).padding(.top, 10)
+            }
             DockChatPane(session: session, dock: dock, conversation: bot.id).padding(.horizontal, 12).padding(.bottom, 12).padding(.top, 4)
         }
     }

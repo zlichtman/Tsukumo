@@ -4,10 +4,10 @@ import SwiftUI
 import TsukumoCore
 import TsukumoUI
 
-// The side dock's shelf and its characters (ported from `AgentsDockStrip`, `DockCharacterTile`,
-// `DockShelf`, `DockGlass`, and `DockMenu` in the old Mac app's dock). A Dock on its
-// side: Liquid Glass, the Dock's proportions, magnification, names on hover, a separator before + and
-// Together, and a sliver at the edge while it's tucked away.
+// The side dock's shelf and its tiles (ported from `AgentsDockStrip`, `DockCharacterTile`, `DockShelf`,
+// `DockGlass`, and `DockMenu` in the old Mac app's dock). A Dock on its side: Liquid Glass, the Dock's
+// proportions, magnification, names on hover, a separator before Together and Settings (always last), and a sliver at the edge while it's
+// tucked away. Its tiles are KemoSabe, then the owner's bots, each as its character (a Codex pet) or its service's mark.
 
 public extension EnvironmentValues {
     /// Offscreen renders can't draw live Liquid Glass: snapshots and tests draw a stand-in instead.
@@ -18,70 +18,80 @@ public extension EnvironmentValues {
 public struct DockGlass<S: Shape>: View {
     let shape: S
     var tint: Color?
+    /// How strongly the tint shows (Tinted glass is stronger than a tinted Glass).
+    var strength: Double = 0.25
     @Environment(\.dockGlassFallback) private var fallback
-    public init(shape: S, tint: Color? = nil) { self.shape = shape; self.tint = tint }
+    public init(shape: S, tint: Color? = nil, strength: Double = 0.25) { self.shape = shape; self.tint = tint; self.strength = strength }
     public var body: some View {
         if fallback {
             shape.fill(.regularMaterial)
-                .overlay(shape.fill((tint ?? .clear).opacity(0.12)))
+                .overlay(shape.fill((tint ?? .clear).opacity(strength * 0.6)))
                 .overlay(shape.stroke(.white.opacity(0.4), lineWidth: 1))
                 .overlay(shape.stroke(Color.black.opacity(0.1), lineWidth: 0.5))
         } else if #available(macOS 26, *) {
-            Color.clear.glassEffect(tint.map { Glass.regular.tint($0.opacity(0.25)) } ?? .regular, in: shape)
+            Color.clear.glassEffect(tint.map { Glass.regular.tint($0.opacity(strength)) } ?? .regular, in: shape)
         } else {
-            shape.fill(.regularMaterial).overlay(shape.stroke(.white.opacity(0.25), lineWidth: 0.75))
+            shape.fill(.regularMaterial).overlay(shape.fill((tint ?? .clear).opacity(strength * 0.6)))
+                .overlay(shape.stroke(.white.opacity(0.25), lineWidth: 0.75))
         }
     }
 }
 
 /// The shelf in its style: Liquid Glass, glass tinted with the accent, a solid color, or nothing (Minimal).
+/// The owner's dock color (`DockSettings.tint`) tints the glass lightly, Tinted glass more, and fills Solid.
 struct DockShelf<S: InsettableShape>: View {
     let style: DockStyle
     let shape: S
     var accent: Color
+    /// The owner's color, or nil for Automatic.
+    var tint: Color? = nil
     var body: some View {
         switch style {
-        case .glass: DockGlass(shape: shape)
+        case .glass: DockGlass(shape: shape, tint: tint, strength: 0.2)
         case .tinted:
-            DockGlass(shape: shape, tint: accent)
-                .overlay(shape.strokeBorder(accent.opacity(0.35), lineWidth: 0.75))
+            // Liquid Glass washes a light tint out over a bright or a dark wallpaper, so the color is also laid
+            // beneath the glass: the shelf reads as that color (coral on Automatic) and still refracts, unlike Solid.
+            let color = tint ?? accent
+            ZStack {
+                shape.fill(color.opacity(0.55))
+                DockGlass(shape: shape, tint: color, strength: 0.6)
+            }
+            .overlay(shape.strokeBorder(color.opacity(0.7), lineWidth: 1))
         case .solid:
-            shape.fill(Color(nsColor: .windowBackgroundColor)).overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75))
+            shape.fill(tint ?? Color(nsColor: .windowBackgroundColor))
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75))
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 2)
         case .minimal: Color.clear
         }
     }
 }
 
-/// One character on the shelf, acting out its state, with its badges.
+/// One bot on the shelf: KemoSabe acting out its mood, a pet acting out its state, or a service's mark with its state
+/// around it.
 struct DockTile: View {
     let bot: BotSpec
-    let state: ClayState
+    let state: BotState
     var size: CGFloat
-    /// The clock, for live moments (a hop, the celebration, looking at the pointer).
-    var time: Double
-    /// Seconds since the state began.
-    var local: Double
     var level: DockAnimationLevel
     var reduceMotion: Bool
     /// False holds still (tucked away or out of sight).
     var active: Bool
-    var gaze: CGPoint?
     var selected = false
-    var engineMark: DockEngineMark = .ring
     var hovered = false
     var pressed = false
     var ringIndicator = false
     var accent: Color
     var reaction: (kind: DockReaction, tick: Int)?
+    @Environment(\.codexPets) private var pets
     var cue: DockWorkCue?
-    @Environment(\.engineInfo) private var engineInfo
-    /// Offscreen renders (snapshots) can't draw a layer's pictures: every tile is drawn as a pose there.
-    @Environment(\.dockGlassFallback) private var offscreen
+    /// Listening to the owner: the voice's level (0 to 1), drawn as a ring that follows it.
+    var listening: Double?
+    /// Clicking talks to it (the app has a voice and the bot chats).
+    var talks = false
+    /// Background work the owner hasn't seen yet (a plugged-in panel's task that finished or didn't), until they open it.
+    var unread: ServiceBotTileStatus?
 
     private struct Poke { var angle: Double = 0; var squash: Double = 0 }
-    /// A looping state, not looking anywhere in particular: drawn once and played by Core Animation.
-    var resting: Bool { ClaySprites.looping.contains(state) && gaze == nil }
     private var still: Bool { reduceMotion || level == .still }
 
     var body: some View {
@@ -96,23 +106,29 @@ struct DockTile: View {
                 Circle().trim(from: 0, to: max(0.04, progress)).stroke(accent, style: .init(lineWidth: 2.5, lineCap: .round))
                     .rotationEffect(.degrees(-90)).frame(width: size * 1.02, height: size * 1.02)
             }
-            if !bot.isKemoSabe, bot.look.ring == .custom || (engineMark == .ring && bot.look.ring == .engine),
-               let ring = DockEngineColor.ring(for: bot) {
-                // Which engine runs it (when the dock shows engines as rings), or the owner's own ring color.
-                Ellipse().strokeBorder(ring.opacity(0.85), lineWidth: max(1.2, size * 0.035))
-                    .frame(width: size * 0.62, height: size * 0.17).offset(y: size * 0.4)
-                    .accessibilityHidden(true)
-            }
             if ringIndicator {
                 Circle().strokeBorder(accent.opacity(0.8), lineWidth: max(1.5, size * 0.04)).frame(width: size * 1.06, height: size * 1.06)
+                    .accessibilityHidden(true)
+            }
+            if let listening {
+                // Listening: a soft accent glow and a ring that grows with the owner's voice.
+                Circle().fill(RadialGradient(colors: [accent.opacity(0.28), .clear], center: .center, startRadius: size * 0.2, endRadius: size * 0.62))
+                    .frame(width: size * 1.2, height: size * 1.2)
+                    .accessibilityHidden(true)
+                Circle().strokeBorder(accent.opacity(0.9), lineWidth: max(1.5, size * 0.045))
+                    .frame(width: size * 1.04, height: size * 1.04)
+                    .scaleEffect(reduceMotion ? 1 : 1 + 0.14 * listening)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.1), value: listening)
                     .accessibilityHidden(true)
             }
             face
         }
         .frame(width: size, height: size)
         .scaleEffect(pressed ? 0.93 : hovered ? 1.05 : 1, anchor: .bottom)
+        .offset(y: state == .chirping && !still ? -size * 0.08 : 0)
         .animation(reduceMotion ? nil : .spring(duration: 0.18, bounce: 0.3), value: hovered)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: pressed)
+        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.5), value: state)
         .keyframeAnimator(initialValue: Poke(), trigger: still ? 0 : (reaction?.tick ?? 0)) { content, poke in
             content.rotationEffect(.radians(poke.angle), anchor: .bottom).scaleEffect(x: 1 + poke.squash, y: 1 - poke.squash, anchor: .bottom)
         } keyframes: { _ in
@@ -130,17 +146,26 @@ struct DockTile: View {
                 } else { LinearKeyframe(0, duration: 0.45) }
             }
         }
-        .overlay(alignment: .bottomLeading) {
-            if engineMark == .logo, !bot.isKemoSabe {
-                EngineMarkView(engineInfo(bot.engine).mark, size: max(9, size * 0.17))
-                    .padding(2).background(Circle().fill(.background).shadow(color: .black.opacity(0.18), radius: 1, y: 0.5))
-                    .offset(x: -1, y: 1)
+        .overlay(alignment: .topLeading) {
+            if listening != nil {
+                Image(systemName: "mic.fill").font(.system(size: max(8, size * 0.17), weight: .bold)).foregroundStyle(.white)
+                    .frame(width: max(14, size * 0.3), height: max(14, size * 0.3)).background(Circle().fill(accent))
+                    .offset(x: -2, y: -2).accessibilityHidden(true)
             }
         }
         .overlay(alignment: .topTrailing) {
             if state == .needsYou {
                 Text("!").font(.system(size: max(9, size * 0.2), weight: .heavy, design: .rounded)).foregroundStyle(.white)
                     .frame(width: max(14, size * 0.3), height: max(14, size * 0.3)).background(Circle().fill(.orange)).offset(x: 2, y: -2)
+            } else if !bot.isKemoSabe, !BotCharacterView.actsOut(bot, pets: pets), [.thinking, .working, .talking].contains(state) {
+                // A mark can't act it out: a small bubble says it's at work.
+                Image(systemName: state == .talking ? "waveform" : "ellipsis")
+                    .font(.system(size: max(7, size * 0.15), weight: .bold)).foregroundStyle(.white)
+                    .symbolEffect(.variableColor.iterative, options: .repeating, isActive: active && !still)
+                    .frame(width: max(16, size * 0.36), height: max(12, size * 0.26))
+                    .background(Capsule().fill(accent))
+                    .offset(x: 3, y: -3)
+                    .accessibilityHidden(true)
             }
         }
         .overlay(alignment: .topLeading) {
@@ -156,41 +181,35 @@ struct DockTile: View {
                 Image(systemName: "text.magnifyingglass").font(.system(size: max(8, size * 0.17), weight: .bold)).foregroundStyle(.white)
                     .frame(width: max(14, size * 0.3), height: max(14, size * 0.3)).background(Circle().fill(Color.blue))
                     .offset(x: 2, y: 1).accessibilityLabel("Ready for review")
-            } else if state == .done {
+            } else if state == .done || (unread == .done && state != .needsYou) {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: max(11, size * 0.26), weight: .semibold)).foregroundStyle(.white, .green)
+                    .background(Circle().fill(.background).padding(1)).offset(x: 2, y: 1).transition(.opacity)
+            } else if unread == .failed, state != .needsYou {
+                Image(systemName: "xmark.circle.fill").font(.system(size: max(11, size * 0.26), weight: .semibold)).foregroundStyle(.white, .red)
                     .background(Circle().fill(.background).padding(1)).offset(x: 2, y: 1).transition(.opacity)
             }
         }
         .contentShape(Rectangle())
-        .help(bot.name + (bot.role.isEmpty ? "" : ": " + bot.role))
+        .help(bot.name + (bot.role.isEmpty ? "" : ": " + bot.role) + (talks ? "\nClick to talk, or hold and let go to send. Double-click for the chat." : "\nClick for what it asked KemoSabe and what it may do."))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(bot.name)
-        .accessibilityValue(state.label)
+        .accessibilityValue(listening != nil ? "Listening" : unread == .done ? "Finished, not opened yet" : unread == .failed ? "Didn’t finish, not opened yet" : state.label)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("dockTile-" + (bot.isKemoSabe ? "kemosabe" : bot.name))
     }
 
     @ViewBuilder private var face: some View {
         if bot.isKemoSabe {
-            // KemoSabe keeps its companion artwork: at its computer while it reads this Mac.
-            KemoSabeFigure(searching: state == .working || state == .thinking, shadow: true)
+            // KemoSabe in its look and palette, acting out its mood (moving only while something is happening).
+            let mood = KemoSabeMood(state, listening: listening != nil)
+            KemoSabeFigure(bot: bot, mood: mood, animated: active && !still && mood != .idle && mood != .sleeping, shadow: true)
                 .scaleEffect(1.08, anchor: .bottom)
-        } else if resting && active && !offscreen {
-            // A loop the window server plays: no redraws while it rests, types, thinks, or talks.
-            ClaySprite(look: bot.look, state: state, side: size, animate: active && !still, level: level,
-                       phase: Double(abs(bot.id.hashValue % 97)) / 97)
-                .scaleEffect(1.12 * bot.look.scale, anchor: .bottom)
         } else {
-            // Its own size in the dock (`BotLook.scale`), standing on the same spot.
-            ClayPoseView(look: bot.look, pose: livePose)
-                .scaleEffect(1.12 * bot.look.scale, anchor: .bottom)
+            BotCharacterView(bot: bot, state: state, size: size * 0.8, animated: active && !still)
+                .shadow(color: .black.opacity(0.22), radius: size * 0.05, y: size * 0.03)
+                .saturation(state == .sleeping ? 0.4 : 1)
+                .opacity(state == .sleeping ? 0.7 : 1)
         }
-    }
-    /// This moment of a one-off state, looking at the pointer when there's one.
-    private var livePose: ClayPose {
-        var pose = ClayMotion.pose(state, time: time, local: local, still: still || !active, seed: Double(abs(bot.id.hashValue % 97)) / 97)
-        if let gaze { pose.gaze = CGPoint(x: gaze.x * 0.9, y: gaze.y * 0.7) }
-        return pose
     }
 }
 
@@ -205,8 +224,9 @@ public struct DockShelfView: View {
     var fixedTime: Double?
     var pointer: CGPoint?
     @State private var hover: CGPoint?
-    @State private var drag: (id: UUID, offset: CGFloat)?
     @State private var pressed: UUID?
+    /// What a press on a character means: talk (tap or hold), or the chat (double-click).
+    @State private var talk = DockTalkGesture()
     @Environment(\.colorScheme) private var scheme
 
     public init(dock: BotDock, layout: DockLayout, revealed: Bool, reduceMotion: Bool, active: Bool = true, fixedTime: Double? = nil, pointer: CGPoint? = nil) {
@@ -218,6 +238,10 @@ public struct DockShelfView: View {
     private var still: Bool { reduceMotion || settings.animation == .still }
     private var right: Bool { settings.edge == .right }
     private var accent: Color { TsukumoTheme(scheme).accent }
+    /// The owner's dock color, if they picked one.
+    private var tint: Color? { settings.tint.map { RGB(hex: $0).color } }
+    /// The sliver, the working ring, and the selected glow: the dock color, or Tsukumo's coral.
+    private var mark: Color { tint ?? accent }
 
     public var body: some View {
         ZStack(alignment: .topLeading) {
@@ -238,7 +262,7 @@ public struct DockShelfView: View {
                 }
                 .transition(reduceMotion ? .opacity : .move(edge: right ? .trailing : .leading).combined(with: .opacity))
             } else {
-                Capsule().fill(accent.opacity(dock.waitingBot != nil ? 0.9 : 0.45))
+                Capsule().fill(mark.opacity(dock.waitingBot != nil ? 0.9 : 0.45))
                     .frame(width: DockLayout.sliver, height: min(120, layout.length * 0.5))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: right ? .trailing : .leading)
                     .padding(right ? .trailing : .leading, 1)
@@ -252,21 +276,23 @@ public struct DockShelfView: View {
         }
         .contextMenu { DockMenu(dock: dock) }
         .environment(\.engineInfo, dock.engineInfo)
+        .environment(\.codexPets, dock.pets)
     }
 
     private var pointerNow: CGPoint? { pointer ?? hover }
-    /// Something only a running clock can show: a chirp's hop, the done celebration, or a bot looking at
-    /// the pointer.
+    /// Something only a running clock can show: a chirp, the done celebration, or listening.
     private var lively: Bool {
         _ = dock.settleTick
         return dock.bots.contains { dock.finishedAt[$0.id] != nil }
             || dock.lastChirp.map { dock.now().timeIntervalSince($0.at) < 3 } == true
+            || dock.voice?.listener != nil
     }
 
     /// The shelf's glass (`glass: true`, drawn when the layout or pointer changes) or its tiles (on the clock).
     private func shelf(time: Double, glass: Bool) -> some View {
         let box = layout.shelfInPanel
-        let count = dock.bots.count + 2
+        let bots = dock.bots
+        let count = bots.count + Self.extraTiles
         let scales = (0..<count).map { scale($0, box: box) }
         let extras = scales.map { (CGFloat($0) - 1) * layout.size }
         let total = extras.reduce(0, +)
@@ -281,7 +307,7 @@ public struct DockShelfView: View {
         let separatorY = center(count - 2).y - layout.size * scales[count - 2] / 2 - (DockLayout.separatorGap + layout.spacing) / 2
         return ZStack(alignment: .topLeading) {
             if glass {
-                DockShelf(style: settings.style, shape: shape, accent: accent)
+                DockShelf(style: settings.style, shape: shape, accent: accent, tint: tint)
                     .frame(width: box.width, height: box.height + total)
                     .position(x: box.midX, y: box.midY)
                 if settings.separators, settings.style != .minimal {
@@ -289,30 +315,42 @@ public struct DockShelfView: View {
                         .position(x: box.midX, y: separatorY)
                 }
             } else {
-                ForEach(Array(dock.bots.enumerated()), id: \.element.id) { index, bot in
+                ForEach(Array(bots.enumerated()), id: \.element.id) { index, bot in
                     let point = center(index)
                     let tile = layout.size * scales[index]
                     characterTile(bot, index: index, size: tile, time: time, center: point)
-                        .position(x: point.x, y: point.y + (drag?.id == bot.id ? drag!.offset : 0))
-                        .zIndex(drag?.id == bot.id ? 2 : 1)
+                        .position(x: point.x, y: point.y)
                     if settings.indicator == .dot, dock.running(bot.id) || dock.needsYou(bot.id) {
-                        Circle().fill(Color.primary.opacity(0.75)).frame(width: 4, height: 4)
+                        Circle().fill(tint ?? Color.primary.opacity(0.75)).frame(width: 4, height: 4)
                             .position(x: right ? box.maxX - layout.padding / 2 : box.minX + layout.padding / 2, y: point.y)
                             .accessibilityHidden(true)
                     }
                 }
-                plusTile(size: layout.size * scales[count - 2]).position(center(count - 2))
-                togetherTile(size: layout.size * scales[count - 1]).position(center(count - 1))
-                if dock.bots.count == 1, settings.labels != .off, dock.surface == nil {
-                    // A first dock: KemoSabe, and an invitation to add a bot.
-                    let index = count - 2
-                    nameLabel(index: index, title: "Add a bot").position(labelPosition(center(index), tile: layout.size))
-                } else if settings.labels != .off, let index = hoveredIndex(box: box), index < count {
+                // Add a Bot right under the bots, then Together, then Settings, always the last tile.
+                addTile(size: layout.size * scales[count - 3]).position(center(count - 3))
+                togetherTile(size: layout.size * scales[count - 2]).position(center(count - 2))
+                settingsTile(size: layout.size * scales[count - 1]).position(center(count - 1))
+                if settings.labels != .off, let index = hoveredIndex(box: box), index < count {
                     nameLabel(index: index).position(labelPosition(center(index), tile: layout.size * scales[index]))
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+    /// The order of the shelf's tiles: the bots, Add a Bot, then Together, then Settings, always last.
+    public enum Tile: Equatable, Sendable { case bot(UUID), add, together, settings }
+    /// The tiles after the bots.
+    public static let extraTiles = 3
+    public static func tiles(_ bots: [BotSpec]) -> [Tile] { bots.map { .bot($0.id) } + [.add, .together, .settings] }
+    /// The name a tile shows on hover.
+    public static func tileTitle(_ index: Int, bots: [BotSpec]) -> String {
+        guard index >= 0, index < bots.count + extraTiles else { return "" }
+        switch tiles(bots)[index] {
+        case .bot: return bots[index].name
+        case .add: return "Add a Bot"
+        case .together: return "Together"
+        case .settings: return "Settings"
+        }
     }
     private func labelPosition(_ center: CGPoint, tile: CGFloat) -> CGPoint {
         let offset = tile / 2 + 8 + (DockLayout.labelSpace - 16) / 2
@@ -330,65 +368,90 @@ public struct DockShelfView: View {
     }
     private func hoveredIndex(box: CGRect) -> Int? {
         guard let point = pointerNow, point.x >= box.minX - layout.reach - 4, point.x <= box.maxX + 4 else { return nil }
-        let count = dock.bots.count + 2
+        let count = dock.bots.count + Self.extraTiles
         return (0..<count).min { abs(box.minY + layout.tileOffset($0) - point.y) < abs(box.minY + layout.tileOffset($1) - point.y) }
             .flatMap { abs(box.minY + layout.tileOffset($0) - point.y) < layout.size * 0.7 ? $0 : nil }
     }
 
     private func characterTile(_ bot: BotSpec, index: Int, size: CGFloat, time: Double, center: CGPoint) -> some View {
         let state = dock.characterState(bot.id, tucked: !revealed)
-        let local: Double = {
-            switch state {
-            case .chirping: return dock.lastChirp.map { dock.now().timeIntervalSince($0.at) } ?? 0
-            case .done: return dock.finishedAt[bot.id].map { dock.now().timeIntervalSince($0) } ?? 0
-            default: return time
-            }
-        }()
-        // It looks at the pointer; when a neighbor chirps, it glances that way.
-        var gaze: CGPoint?
-        if settings.animation == .lively, let point = pointerNow, hoveredIndex(box: layout.shelfInPanel) != nil {
-            let dx = point.x - center.x, dy = point.y - center.y, length = max(1, hypot(dx, dy))
-            gaze = CGPoint(x: dx / length, y: dy / length)
-        }
-        if let chirp = dock.lastChirp, chirp.bot != bot.id, dock.now().timeIntervalSince(chirp.at) < 1.6,
-           let other = dock.bots.firstIndex(where: { $0.id == chirp.bot }) {
-            gaze = CGPoint(x: right ? -0.3 : 0.3, y: other < index ? -1 : 1)
-        }
-        return DockTile(bot: bot, state: state, size: size, time: time, local: local, level: settings.animation, reduceMotion: reduceMotion,
-                        active: active && fixedTime == nil && revealed, gaze: gaze,
-                        selected: dock.surface == .bot(bot.id), engineMark: settings.engineMark,
+        let listener = dock.listener(for: bot.id)
+        let talks = dock.voice != nil && bot.engine.chats
+        return DockTile(bot: bot, state: state, size: size, level: settings.animation, reduceMotion: reduceMotion,
+                        active: active && fixedTime == nil && revealed,
+                        selected: dock.surface == .bot(bot.id) || dock.surface == .panel(bot.id),
                         hovered: hoveredBot == bot.id, pressed: pressed == bot.id,
-                        ringIndicator: settings.indicator == .ring && (dock.running(bot.id) || dock.needsYou(bot.id)), accent: accent,
-                        reaction: dock.reaction[bot.id], cue: dock.cues[bot.id])
-            .onTapGesture(count: 2) { dock.react(.giggle, on: bot.id) }
-            .onTapGesture { dock.toggle(.bot(bot.id)) }
-            .onLongPressGesture(minimumDuration: 0.35, perform: {}, onPressingChanged: { pressing in
-                pressed = pressing ? bot.id : nil
-                if pressing { dock.react(.poke, on: bot.id) }
+                        ringIndicator: settings.indicator == .ring && (dock.running(bot.id) || dock.needsYou(bot.id)), accent: mark,
+                        reaction: dock.reaction[bot.id], cue: dock.cue(for: bot.id), listening: listener.map(\.level), talks: talks,
+                        unread: dock.unread(bot.id))
+            // One gesture for a press: down starts listening (hold to talk), a quick click keeps listening until the
+            // owner stops talking, and a second click right after opens the chat. A service that doesn't chat opens
+            // its panel instead.
+            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global).onChanged { _ in
+                guard !talk.isPressing else { return }
+                pressed = bot.id
+                guard talks else { _ = talk.began(bot.id, listening: false, now: dock.now()); return }
+                dock.perform(talk.began(bot.id, listening: dock.listener(for: bot.id) != nil, now: dock.now()), on: bot.id)
+            }.onEnded { _ in
+                pressed = nil
+                let action = talk.ended(now: dock.now())
+                if !bot.engine.chats { dock.toggle(.panel(bot.id)) }
+                // Without a voice (the demo), a click opens the chat as before.
+                else if dock.voice == nil { dock.toggle(.bot(bot.id)) } else { dock.perform(action, on: bot.id) }
             })
-            .simultaneousGesture(DragGesture(minimumDistance: 6).onChanged { value in
-                guard !bot.isKemoSabe else { return }
-                drag = (bot.id, value.translation.height)
-            }.onEnded { value in
-                guard !bot.isKemoSabe else { return }
-                let steps = Int((value.translation.height / (layout.size + layout.spacing)).rounded())
-                withAnimation(reduceMotion ? nil : .spring(duration: 0.3)) {
-                    drag = nil
-                    if steps != 0 { dock.move(bot.id, to: index + steps) }
+            .contextMenu {
+                if talks {
+                    Button(dock.listener(for: bot.id) == nil ? "Talk to \(bot.name)" : "Send Now") {
+                        if let live = dock.listener(for: bot.id) { live.stop() } else { dock.talk(to: bot.id, hold: false) }
+                    }
                 }
-            })
-            .accessibilityAction { dock.toggle(.bot(bot.id)) }
+                if bot.engine.chats { Button("Open Chat") { dock.open(.bot(bot.id)) } }
+                Button(DockPanelWords.menuTitle(bot)) { dock.open(.panel(bot.id)) }
+                if !bot.isKemoSabe {
+                    let place = dock.bots.firstIndex { $0.id == bot.id } ?? 0
+                    if place > 1 { Button("Move Up") { dock.move(bot.id, to: place - 1) } }
+                    if place < dock.bots.count - 1 { Button("Move Down") { dock.move(bot.id, to: place + 1) } }
+                    Button("Remove from Dock") { dock.remove(bot.id) }
+                }
+                Divider()
+                DockMenu(dock: dock)
+            }
+            .accessibilityAction {
+                if !bot.engine.chats { dock.toggle(.panel(bot.id)) }
+                else if dock.voice == nil { dock.toggle(.bot(bot.id)) }
+                else if let live = dock.listener(for: bot.id) { live.stop() } else { dock.talk(to: bot.id, hold: false) }
+            }
+            .accessibilityAction(named: "Open Chat") { if bot.engine.chats { dock.open(.bot(bot.id)) } }
+            .accessibilityAction(named: DockPanelWords.menuTitle(bot)) { dock.open(.panel(bot.id)) }
+            .accessibilityHint(talks ? "Talks to \(bot.name). Double-click opens the chat." : "")
     }
 
-    private func plusTile(size: CGFloat) -> some View {
-        Button { dock.toggle(.edit(nil)) } label: {
-            Image(systemName: "plus").font(.system(size: size * 0.34, weight: .medium)).foregroundStyle(.secondary)
-                .frame(width: size * 0.82, height: size * 0.82)
-                .background(RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.25), style: .init(lineWidth: 1, dash: [4, 3])))
-                .frame(width: size, height: size).contentShape(Rectangle())
+    /// Add a Bot: bring in a bot the owner has elsewhere, or make one.
+    private func addTile(size: CGFloat) -> some View {
+        let on = dock.surface == .addBot
+        return Button { dock.toggle(.addBot) } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.24, style: .continuous).fill(on ? accent.opacity(0.25) : Color.primary.opacity(0.07))
+                    .frame(width: size * 0.84, height: size * 0.84)
+                Image(systemName: "plus").font(.system(size: size * 0.36, weight: .semibold)).foregroundStyle(on ? accent : .secondary)
+            }
+            .frame(width: size, height: size).contentShape(Rectangle())
         }
-        .buttonStyle(.plain).help("Add a bot").accessibilityLabel("Add a bot").accessibilityIdentifier("dockAddBot")
+        .buttonStyle(.plain).help("Add a bot")
+        .accessibilityLabel("Add a Bot").accessibilityIdentifier("dockAddBot")
+    }
+    /// Settings, the same window as the menu bar's Settings… and ⌘,.
+    private func settingsTile(size: CGFloat) -> some View {
+        Button { dock.dismissCallout(); dock.openSettings?() } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: size * 0.24, style: .continuous).fill(Color.primary.opacity(0.07))
+                    .frame(width: size * 0.84, height: size * 0.84)
+                Image(systemName: "gearshape.fill").font(.system(size: size * 0.36)).foregroundStyle(.secondary)
+            }
+            .frame(width: size, height: size).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).help("Settings")
+        .accessibilityLabel("Settings").accessibilityHint("Opens Tsukumo’s Settings.").accessibilityIdentifier("dockSettings")
     }
     private func togetherTile(size: CGFloat) -> some View {
         let on = dock.surface == .together
@@ -404,18 +467,27 @@ public struct DockShelfView: View {
         .accessibilityLabel("Together").accessibilityIdentifier("dockTogether")
     }
     private func nameLabel(index: Int, title: String? = nil) -> some View {
-        let title = title ?? (index < dock.bots.count ? dock.bots[index].name : index == dock.bots.count ? "Add a bot" : "Together")
-        return Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+        let title = title ?? Self.tileTitle(index, bots: dock.bots)
+        // Under a bot's name, what a click does: talk (and twice, its chat), or its page for a bot that doesn't chat.
+        let bot = index < dock.bots.count ? dock.bots[index] : nil
+        let hint: String? = bot.map { bot in
+            guard bot.engine.chats else { return "Click: its page" }
+            return dock.voice == nil ? "Click: chat" : "Click: talk · 2×: chat"
+        }
+        return VStack(alignment: right ? .trailing : .leading, spacing: 1) {
+            Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+            if let hint { Text(hint).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1) }
+        }
             .padding(.horizontal, 10).padding(.vertical, 4)
-            .background { if settings.labels == .glass { DockGlass(shape: Capsule()) } }
+            .background { if settings.labels == .glass { DockGlass(shape: RoundedRectangle(cornerRadius: 12, style: .continuous)) } }
             .shadow(color: settings.labels == .plain ? .black.opacity(0.35) : .clear, radius: 2, y: 1)
             .frame(width: DockLayout.labelSpace - 16, alignment: right ? .trailing : .leading)
             .allowsHitTesting(false)
     }
 }
 
-/// The dock's right-click menu, like the Dock's own: where it sits, hiding, magnification, then Add a Bot
-/// and Settings (the rest of the dock's look is in Settings, Dock).
+/// The dock's right-click menu, like the Dock's own: where it sits, hiding, magnification, then Settings (the
+/// rest of the dock's look is in Settings, Dock).
 struct DockMenu: View {
     let dock: BotDock
     var body: some View {
@@ -433,8 +505,9 @@ struct DockMenu: View {
         Toggle("Automatically Hide", isOn: Binding(get: { settings.autohide }, set: { value in store.update { $0.autohide = value } }))
         Toggle("Magnification", isOn: Binding(get: { settings.magnification }, set: { value in store.update { $0.magnification = value } }))
         Divider()
-        Button("Add a Bot…") { dock.toggle(.edit(nil)) }
+        Button("Add a Bot…") { dock.open(.addBot) }
         if let openSettings = dock.openSettings {
+            Divider()
             Button("Settings…") { openSettings() }
         }
     }

@@ -27,6 +27,16 @@ public struct ItemKind: RawRepresentable, Hashable, Codable, Sendable, Expressib
     /// A password, key, door code, or anything else that unlocks something.
     public static let credential: ItemKind = "credential"
     public static let health: ItemKind = "health"
+    /// An email the owner's Mail or a connected account holds.
+    public static let email: ItemKind = "email"
+    /// What the photo library says about photos: when, roughly where, which album. Never the pictures.
+    public static let photo: ItemKind = "photo"
+    /// A file in a folder the owner picked for KemoSabe.
+    public static let document: ItemKind = "document"
+    /// What the owner is listening to, or listened to lately.
+    public static let music: ItemKind = "music"
+    /// Something a connected account (an MCP server the owner added) returned.
+    public static let connector: ItemKind = "connector"
 
     /// The least private level an item of this kind may have. A label below it is raised to it.
     public var floor: PrivacyLevel {
@@ -35,7 +45,7 @@ public struct ItemKind: RawRepresentable, Hashable, Codable, Sendable, Expressib
         case .location, .health: .sensitive
         // Messages are Personal at least, so an agent the owner allowed always can be answered
         // from them (the demo); the owner can raise a source to Sensitive or Device only.
-        case .textMessage, .contact, .calendarEvent, .reminder, .personalAnswer: .personal
+        case .textMessage, .contact, .calendarEvent, .reminder, .personalAnswer, .email, .photo: .personal
         default: .open
         }
     }

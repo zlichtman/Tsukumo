@@ -26,23 +26,22 @@ struct ChatMetrics {
 /// composer, and the banner.
 public struct ChatScreen<Leading: View, Trailing: View>: View {
     @Bindable var session: ChatSession
-    var onCreateBot: () -> Void
     var leading: Leading
     var trailing: Trailing
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    public init(session: ChatSession, onCreateBot: @escaping () -> Void = {}, @ViewBuilder leading: () -> Leading,
+    public init(session: ChatSession, @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing) {
-        self.session = session; self.onCreateBot = onCreateBot; self.leading = leading(); self.trailing = trailing()
+        self.session = session; self.leading = leading(); self.trailing = trailing()
     }
 
     public var body: some View {
         let theme = TsukumoTheme(scheme)
         VStack(spacing: 0) {
             ChatHeader { leading } trailing: { trailing }
-            ChatTranscript(session: session, onCreateBot: onCreateBot)
-            ChatComposer(session: session, onCreateBot: onCreateBot)
+            ChatTranscript(session: session)
+            ChatComposer(session: session)
                 .padding(.horizontal, 16).padding(.bottom, 8)
         }
         .background(theme.background.ignoresSafeArea())
@@ -130,12 +129,11 @@ struct ChatBanner: View {
 /// The scrolling conversation.
 public struct ChatTranscript: View {
     var session: ChatSession
-    var onCreateBot: () -> Void
-    public init(session: ChatSession, onCreateBot: @escaping () -> Void = {}) { self.session = session; self.onCreateBot = onCreateBot }
+    public init(session: ChatSession) { self.session = session }
     public var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                ChatTranscriptContent(session: session, showsStage: true, onCreateBot: onCreateBot)
+                ChatTranscriptContent(session: session, showsStage: true)
                 Color.clear.frame(height: 1).id("chatBottom")
             }
             .scrollDismissesKeyboard(.interactively)
@@ -156,11 +154,10 @@ public struct ChatTranscriptContent: View {
     @Environment(\.chatDensity) private var density
     var session: ChatSession
     var showsStage: Bool
-    var onCreateBot: () -> Void
     @Environment(\.colorScheme) private var scheme
 
-    public init(session: ChatSession, showsStage: Bool = true, onCreateBot: @escaping () -> Void = {}) {
-        self.session = session; self.showsStage = showsStage; self.onCreateBot = onCreateBot
+    public init(session: ChatSession, showsStage: Bool = true) {
+        self.session = session; self.showsStage = showsStage
     }
 
     /// The stage shows until a bot has replied or KemoSabe has answered (a live question keeps it).
@@ -174,11 +171,11 @@ public struct ChatTranscriptContent: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: ChatMetrics(density).rowSpacing) {
             if session.thread.messages.isEmpty {
-                ChatGreeting(session: session, onCreateBot: onCreateBot)
+                ChatGreeting(session: session)
             } else if showsStage && stageStays {
                 // KemoSabe above the conversation until the first answer: at its computer while it
                 // reads this device. As on the website, it steps away once replies arrive.
-                KemoSabeFigure(searching: session.kemoSabeIsReading)
+                KemoSabeFigure(bot: session.bot(BotSpec.kemoSabeID) ?? .kemoSabe(), searching: session.kemoSabeIsReading)
                     .frame(width: 150, height: 150).frame(maxWidth: .infinity)
                     .accessibilityIdentifier("chatStage")
             }
@@ -187,6 +184,11 @@ public struct ChatTranscriptContent: View {
             }
             ForEach(session.threadBots.filter { session.showsWorkingRow($0.id) }) { bot in
                 WorkingRow(bot: bot, text: session.working[bot.id]?.text ?? "")
+            }
+            ForEach(session.approvals) { approval in
+                if let bot = session.bot(approval.bot) {
+                    ApprovalCard(bot: bot, approval: approval) { session.decideApproval(approval.id, allow: $0) }
+                }
             }
         }
         .padding(.horizontal, ChatMetrics(density).gutter)
@@ -200,7 +202,6 @@ public struct ChatTranscriptContent: View {
 /// The empty chat: KemoSabe, a greeting, and a few ways to start.
 struct ChatGreeting: View {
     var session: ChatSession
-    var onCreateBot: () -> Void
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// While the keyboard is up, KemoSabe steps aside so the greeting stays above the composer.
@@ -209,7 +210,7 @@ struct ChatGreeting: View {
         let theme = TsukumoTheme(scheme)
         VStack(alignment: .leading, spacing: 12) {
             if !typing {
-                KemoSabeFigure().frame(width: 200, height: 200).frame(maxWidth: .infinity).padding(.bottom, 26)
+                KemoSabeFigure(bot: session.bot(BotSpec.kemoSabeID) ?? .kemoSabe()).frame(width: 200, height: 200).frame(maxWidth: .infinity).padding(.bottom, 26)
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
             }
             Text("What’s on your mind?").font(.system(size: TsukumoType.size(.largeTitle), weight: .semibold))
@@ -218,7 +219,7 @@ struct ChatGreeting: View {
             VStack(alignment: .leading, spacing: 10) {
                 suggestion("Plan my day", icon: "sun.max") { session.draft = "Help me plan my day. Ask what you need to know first." }
                 suggestion("Think something through", icon: "sparkle") { session.draft = "Help me think through a decision. Start with one useful question." }
-                suggestion("Make a bot", icon: "plus.circle", action: onCreateBot)
+                suggestion("Write a message", icon: "square.and.pencil") { session.draft = "Help me write a short message. Ask who it’s for first." }
             }.padding(.top, 18)
         }
         .padding(.top, 12)
@@ -404,7 +405,7 @@ public struct KemoSabeCard: View {
 
     public var body: some View {
         let theme = TsukumoTheme(scheme)
-        // KemoSabe's own color (coral unless the owner picked another): the one thing about it that changes.
+        // KemoSabe's color, from its companion palette (coral in Apricot): the one thing about it that changes.
         let tint = kemoSabe.kemoSabeColor
         HStack(alignment: .top, spacing: ChatMetrics(density).avatarGap) {
             BotAvatar(bot: kemoSabe, size: ChatMetrics(density).avatarSize, locked: true)
@@ -412,7 +413,7 @@ public struct KemoSabeCard: View {
                 NameLabel(name: kemoSabe.name)
                 VStack(alignment: .leading, spacing: 8) {
                     Label("\(asker) asked \(kemoSabe.name)", systemImage: "lock.shield")
-                        .tsukumoFont(.caption, weight: .semibold).foregroundStyle(tint)
+                        .tsukumoFont(.caption, weight: .semibold).foregroundStyle(kemoSabe.kemoSabeTextColor(scheme))
                     Text("“" + question + "”").tsukumoFont(.body).foregroundStyle(theme.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     switch card {
@@ -518,6 +519,39 @@ struct ConsentPrompt: View {
             .accessibilityIdentifier("consentAlways")
         Button(ConsentChoice.once.title) { decide(.once) }.buttonStyle(.bordered).accessibilityIdentifier("consentOnce")
         Button(ConsentChoice.deny.title) { decide(.deny) }.buttonStyle(.bordered).accessibilityIdentifier("consentDeny")
+    }
+}
+
+/// A coding bot asking to do something its access leaves to the owner: what it wants, then Allow or
+/// Don't allow. Its turn waits until the owner answers (stopping the turn answers no).
+struct ApprovalCard: View {
+    @Environment(\.chatDensity) private var density
+    let bot: BotSpec
+    let approval: ChatSession.PendingApproval
+    let decide: (Bool) -> Void
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        let theme = TsukumoTheme(scheme)
+        HStack(alignment: .top, spacing: ChatMetrics(density).avatarGap) {
+            BotAvatar(bot: bot, size: ChatMetrics(density).avatarSize, state: .working)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("\(bot.name) wants to").tsukumoFont(.caption, weight: .semibold).foregroundStyle(theme.secondary)
+                Text(approval.summary).tsukumoFont(.callout, weight: .semibold).lineLimit(4).textSelection(.enabled)
+                Text("Its permissions ask you first for this. Nothing happens until you answer.")
+                    .tsukumoFont(.caption).foregroundStyle(theme.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button("Allow") { decide(true) }.modifier(ProminentAccent(accent: theme.accent)).accessibilityIdentifier("approvalAllow")
+                    Button("Don’t allow") { decide(false) }.buttonStyle(.bordered).accessibilityIdentifier("approvalDeny")
+                }
+                .controlSize(density == .compact ? .small : .regular)
+            }
+            .padding(12)
+            .background(theme.fill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.orange.opacity(0.45), lineWidth: 0.75))
+            Spacer(minLength: 16)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("approvalCard")
     }
 }
 

@@ -2,10 +2,18 @@ TsukumoUI artwork
 
 - KemoSabe.png and KemoSabeSearching.png: KemoSabe's companion artwork, baked from the original plates
   in the old KemoSabe app's Resources/Character/Artwork (body-clean-v3, paws-v3, computer-v4; in legacy/ios/KemoSabe/Resources/Character/Artwork)
-  at their resting pose.
+  at their resting pose. They're painted in the Apricot palette. CompanionArt.swift recolors them at run time
+  to KemoSabe's other companion palettes with the old app's recoloring (its kemoPlate shader in
+  legacy/ios/KemoSabe/KemoArtwork.metal, and the watch's CPU copy, KemoTint, in legacy/ios/KemoSabeWatch);
+  no recolored copies ship. The artwork is Tsukumo's own, made for the old KemoSabe app; the legacy apps
+  carry no separate license for it.
 - TsukumoMark.png and TsukumoWordmark.png: cropped from legacy/macos/KemoSabeMac/Brand/Tsukumo.png.
 - EngineMarkClaude.png and EngineMarkOpenAI.png: marks that identify the engine a bot runs on. They are
   trademarks of their owners, used only to name each engine, unmodified except for size and one-color
   tint. Tsukumo isn't affiliated with or endorsed by these companies.
   - Claude Spark (Clay): Anthropic, PBC. Source: Anthropic press kit (anthropic.com/press-kit).
   - OpenAI Blossom: OpenAI. Source: openai.com/brand.
+- Character-lobster.webp, Character-brain.webp, Character-octopus.webp, Character-fox.webp, Character-cat.webp,
+  Character-penguin.webp, and Character-frog.webp: Tsukumo's own characters, sprite sheets hatched for Tsukumo on
+  October 8, 2026 with the hatch-pet skill (Apache-2.0) in the owner's Codex app, in Codex's pet sheet layout
+  (8 columns of 192 x 208 cells, 11 rows). Converted from PNG to WebP; the art is Tsukumo's.

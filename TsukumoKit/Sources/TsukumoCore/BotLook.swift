@@ -1,296 +1,123 @@
 import Foundation
 
-// A bot's clay character, without any drawing (TsukumoUI and TsukumoDock draw it). Ported from the
-// dock's `DockLook` and the add-bot logic in the stopped dock branch (`BotMaking.swift`).
+// What a bot looks like, without any drawing (TsukumoUI and TsukumoDock draw it). KemoSabe has a look of its own:
+// its figure (its cloud, or the two-tone figure) in a companion palette. A bot on Codex may wear one of the owner's Codex
+// pets (`pet`; OpenAI's characters stay on OpenAI's product, `BotSpec.wearsCodexPets`); any bot may wear one of
+// Tsukumo's own characters (`tsukumo:<id>`, shipped in TsukumoUI); every other bot wears its service's mark. The clay characters of the old apps (shapes, eyes, toppers,
+// props, the owner's colors, dock sizes and rings) are gone; a file written before still loads, and those parts are
+// ignored.
 
-/// A bot's character: a body shape, a palette with the owner's own colors in place of any of its
-/// colors, eyes and an expression, a topper, an accessory, a prop, and how it sits in the Mac's dock
-/// (its size and ring).
-///
-/// KemoSabe's character is always its cloud: `normalizedForKemoSabe()` keeps only its color
-/// (`accentColor`), so a synced or decoded KemoSabe can never carry another look.
+/// KemoSabe's figure, its owner's pick (`BotLook.figure`): `.cloud` is its own companion cloud, the standard;
+/// `.finder` is the two-tone figure with a blue half and a white half.
+public enum KemoSabeLook: String, CaseIterable, Identifiable, Sendable {
+    /// KemoSabe's own cloud, the default.
+    case cloud
+    /// The two-tone figure.
+    case finder
+    public var id: String { rawValue }
+    /// KemoSabe's look until its owner picks one (`BotLook.figure`): its cloud.
+    public static let standard: KemoSabeLook = .cloud
+    /// The palette KemoSabe starts in with this look: Apricot (cream and coral) or Classic (white and blue).
+    public var defaultPalette: String { self == .finder ? "classic" : "apricot" }
+    /// Its name in the character picker. The figure is named for what it is (the owner, October 8, 2026: "it's the
+    /// Finder icon"), the one exception to AGENTS.md rule 8.
+    public var title: String { self == .cloud ? "KemoSabe" : "Finder" }
+}
+
+/// What a bot looks like: KemoSabe's companion palette (one of `BotPalette.all`) and figure, or another bot's pet.
+/// `normalizedForKemoSabe()` keeps only the palette and figure, so a synced or decoded KemoSabe can never carry
+/// another look.
 public struct BotLook: Codable, Hashable, Sendable {
-    public enum Shape: String, CaseIterable, Codable, Sendable, Identifiable {
-        case bean, gumdrop, block, mochi, sprout, pebble
-        public var id: String { rawValue }
-        public var title: String { rawValue.capitalized }
-    }
-    public enum Eyes: String, CaseIterable, Codable, Sendable, Identifiable {
-        case dots, ovals, sparkle, visor
-        public var id: String { rawValue }
-        public var title: String { rawValue.capitalized }
-    }
-    /// Something on its head that makes its silhouette its own.
-    public enum Topper: String, CaseIterable, Codable, Sendable, Identifiable {
-        case none, ears, roundEars, antenna, tuft, leaf
-        public var id: String { rawValue }
-        public var title: String {
-            switch self {
-            case .none: "Nothing"
-            case .ears: "Pointy ears"
-            case .roundEars: "Round ears"
-            case .antenna: "Antenna"
-            case .tuft: "Tuft"
-            case .leaf: "Leaf"
-            }
-        }
-    }
-    public enum Prop: String, CaseIterable, Codable, Sendable, Identifiable {
-        case none, pencil, hardHat, glasses, wrench, headset, paintbrush, book, antenna
-        public var id: String { rawValue }
-        public var title: String {
-            switch self {
-            case .none: "Nothing"
-            case .hardHat: "Hard hat"
-            default: rawValue.capitalized
-            }
-        }
-    }
-    /// Its face at rest (a state's own face, talking or asleep, wins while it lasts).
-    public enum Expression: String, CaseIterable, Codable, Sendable, Identifiable {
-        case smile, grin, calm, smirk, wow, focused
-        public var id: String { rawValue }
-        public var title: String {
-            switch self {
-            case .smile: "Smile"
-            case .grin: "Big grin"
-            case .calm: "Calm"
-            case .smirk: "Smirk"
-            case .wow: "Wow"
-            case .focused: "Focused"
-            }
-        }
-    }
-    /// Something it wears, from the clay family.
-    public enum Accessory: String, CaseIterable, Codable, Sendable, Identifiable {
-        case none, bowTie, scarf, necklace, flower, badge
-        public var id: String { rawValue }
-        public var title: String {
-            switch self {
-            case .none: "Nothing"
-            case .bowTie: "Bow tie"
-            case .scarf: "Scarf"
-            case .necklace: "Necklace"
-            case .flower: "Flower"
-            case .badge: "Badge"
-            }
-        }
-    }
-    /// The thin ring at its feet in the Mac's dock.
-    public enum Ring: String, CaseIterable, Codable, Sendable, Identifiable {
-        /// The color of what runs it, when the dock shows engines as rings.
-        case engine
-        /// `ringColor`, always.
-        case custom
-        /// No ring.
-        case hidden
-        public var id: String { rawValue }
-        public var title: String {
-            switch self {
-            case .engine: "Engine color"
-            case .custom: "My color"
-            case .hidden: "No ring"
-            }
-        }
-    }
-
-    /// How big it may sit in the dock, against the dock's tile size.
-    public static let scaleRange: ClosedRange<Double> = 0.8...1.25
-
-    public var shape: Shape
-    /// A palette ID from `BotPalette.all`.
+    /// The most a pet's small picture may weigh (it syncs with the bot).
+    public static let maxPetImage = 48 * 1024
+    /// A palette ID from `BotPalette.all`. For KemoSabe, its companion palette.
     public var palette: String
-    public var eyes: Eyes
-    public var prop: Prop
-    public var topper: Topper
-    /// Its body color as hex ("F5E7CF") in place of the palette's; nil is the palette's.
-    public var bodyColor: String?
-    /// Its accent (cheeks, ears, antenna, the dots it thinks with) as hex; nil is the palette's. For
-    /// KemoSabe, its one color: its card, ring, and buttons in the chat.
+    /// The palette's accent, kept beside it so an older build that knew only KemoSabe's accent color still
+    /// shows about the same color. Nil for Apricot.
     public var accentColor: String?
-    public var expression: Expression
-    public var accessory: Accessory
-    /// Rosy cheeks.
-    public var blush: Bool
-    /// Its size in the dock (`scaleRange`).
-    public var scale: Double
-    public var ring: Ring
-    /// The ring's color as hex, when `ring` is `.custom`.
-    public var ringColor: String?
+    /// KemoSabe's figure, when its owner picked one; nil is the standard look (its cloud). It syncs with the palette.
+    public var figure: KemoSabeLook?
+    /// Another bot's character: a Codex pet's ID ("seedy", or "custom:<folder>" for one the owner hatched), drawn
+    /// from the owner's own Codex on a Mac. Nil wears its service's mark.
+    public var pet: String?
+    /// The pet's name, for a device that can't read the owner's Codex.
+    public var petName: String?
+    /// A small still picture of the pet (PNG), so a device without the owner's Codex still shows it.
+    public var petImage: Data?
 
-    public init(shape: Shape, palette: String, eyes: Eyes, prop: Prop = .none, topper: Topper = .none,
-                bodyColor: String? = nil, accentColor: String? = nil, expression: Expression = .smile, accessory: Accessory = .none,
-                blush: Bool = true, scale: Double = 1, ring: Ring = .engine, ringColor: String? = nil) {
-        self.shape = shape; self.palette = palette; self.eyes = eyes; self.prop = prop; self.topper = topper
-        self.bodyColor = bodyColor; self.accentColor = accentColor; self.expression = expression; self.accessory = accessory
-        self.blush = blush; self.scale = scale; self.ring = ring; self.ringColor = ringColor
+    public init(palette: String = KemoSabeLook.standard.defaultPalette, accentColor: String? = nil, figure: KemoSabeLook? = nil,
+                pet: String? = nil, petName: String? = nil, petImage: Data? = nil) {
+        self.palette = palette; self.accentColor = accentColor; self.figure = figure
+        self.pet = pet; self.petName = petName; self.petImage = petImage
+    }
+    /// A bot wearing a pet.
+    /// Whether a pet id is one of Tsukumo's own characters, which any bot may wear.
+    public static func isTsukumoCharacter(_ id: String?) -> Bool { id?.hasPrefix("tsukumo:") ?? false }
+
+    public static func pet(_ id: String, name: String?, image: Data?) -> BotLook {
+        BotLook(pet: id, petName: name, petImage: image).normalized()
     }
 
-    /// KemoSabe's own look: its cloud, in coral.
-    public static let kemoSabe = BotLook(shape: .bean, palette: "apricot", eyes: .dots)
-    /// KemoSabe's look in its own color (any valid hex; `BotTint.kemoSabe` are the ones offered).
-    public static func kemoSabe(tint: String?) -> BotLook {
-        var look = kemoSabe
-        look.accentColor = tint.flatMap(BotTint.normalized)
-        return look
+    /// KemoSabe's own look, in the palette its look starts with.
+    public static let kemoSabe = BotLook.kemoSabe(palette: KemoSabeLook.standard.defaultPalette)
+    /// KemoSabe in one of its companion palettes (`BotPalette.all`; an unknown ID is Apricot), and its figure.
+    public static func kemoSabe(palette id: String, figure: KemoSabeLook? = nil) -> BotLook {
+        let palette = BotPalette.named(id)
+        return BotLook(palette: palette.id, accentColor: palette.id == "apricot" ? nil : palette.accent, figure: figure)
     }
-    /// This look as KemoSabe may have it: the standard cloud, keeping only its color.
-    public func normalizedForKemoSabe() -> BotLook { .kemoSabe(tint: accentColor) }
+    /// This look as KemoSabe may have it: its companion palette and figure. A look saved when KemoSabe had only an
+    /// accent color (an older build, another device) takes the palette nearest that color.
+    public func normalizedForKemoSabe() -> BotLook {
+        .kemoSabe(palette: BotPalette.companion(palette: palette, accent: accentColor).id, figure: figure)
+    }
+    /// The figure KemoSabe shows.
+    public var kemoSabeFigure: KemoSabeLook { figure ?? .standard }
 
-    /// A clean copy: colors that aren't hex are dropped and the dock size is kept in range.
+    /// A clean copy: an accent that isn't hex is dropped, and a pet's ID, name, and picture are bounded (a picture
+    /// that's too big, or isn't a PNG, is dropped; the pet still shows where its Codex is).
     public func normalized() -> BotLook {
-        var copy = self
-        copy.bodyColor = bodyColor.flatMap(BotTint.normalized)
-        copy.accentColor = accentColor.flatMap(BotTint.normalized)
-        copy.ringColor = ringColor.flatMap(BotTint.normalized)
-        copy.scale = scale.isFinite ? min(Self.scaleRange.upperBound, max(Self.scaleRange.lowerBound, scale)) : 1
-        if copy.ring == .custom && copy.ringColor == nil { copy.ring = .engine }
-        return copy
+        let id = pet?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keptPet = id.flatMap { !$0.isEmpty && $0.count <= 120 && !$0.contains("/") && !$0.contains("..") ? $0 : nil }
+        let name = petName?.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40)
+        let image = petImage.flatMap { $0.count <= Self.maxPetImage && $0.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? $0 : nil }
+        return BotLook(palette: palette, accentColor: accentColor.flatMap(BotTint.normalized), figure: figure,
+                       pet: keptPet, petName: keptPet == nil ? nil : name.map(String.init).flatMap { $0.isEmpty ? nil : $0 },
+                       petImage: keptPet == nil ? nil : image)
     }
 
-    /// The colors it's drawn with: the palette's, with the owner's own in place of any.
-    public var bodyHex: String { bodyColor ?? BotPalette.named(palette).body }
-    public var accentHex: String { accentColor ?? BotPalette.named(palette).accent }
-    public var inkHex: String { BotPalette.named(palette).background }
-
-    /// Changes whenever the drawing would (for caches of baked pictures). The dock size and ring
-    /// aren't drawn into the character, so they aren't in it.
-    public var drawingKey: String {
-        [shape.rawValue, palette, eyes.rawValue, prop.rawValue, topper.rawValue, bodyColor ?? "-", accentColor ?? "-",
-         expression.rawValue, accessory.rawValue, blush ? "blush" : "plain"].joined(separator: "|")
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case shape, palette, eyes, prop, topper, bodyColor, accentColor, expression, accessory, blush, scale, ring, ringColor
-    }
-    /// A part a newer build added falls back to a plain one, so the bot still loads.
+    private enum CodingKeys: String, CodingKey { case palette, accentColor, figure, pet, petName, petImage }
+    /// The palette, its accent, the figure, and the pet are read (a figure a newer build added is the standard look); the clay
+    /// parts an older build wrote are ignored.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        func raw<T: RawRepresentable>(_ key: CodingKeys, _ fallback: T) -> T where T.RawValue == String {
-            (try? c.decodeIfPresent(String.self, forKey: key)).flatMap { $0.flatMap(T.init(rawValue:)) } ?? fallback
-        }
-        func text(_ key: CodingKeys) -> String? { (try? c.decodeIfPresent(String.self, forKey: key)).flatMap { $0 } }
-        shape = raw(.shape, Shape.bean)
-        palette = text(.palette) ?? BotPalette.all[0].id
-        eyes = raw(.eyes, Eyes.dots)
-        prop = raw(.prop, Prop.none)
-        topper = raw(.topper, Topper.none)
-        bodyColor = text(.bodyColor)
-        accentColor = text(.accentColor)
-        expression = raw(.expression, Expression.smile)
-        accessory = raw(.accessory, Accessory.none)
-        blush = (try? c.decodeIfPresent(Bool.self, forKey: .blush)).flatMap { $0 } ?? true
-        scale = (try? c.decodeIfPresent(Double.self, forKey: .scale)).flatMap { $0 } ?? 1
-        ring = raw(.ring, Ring.engine)
-        ringColor = text(.ringColor)
+        palette = (try? c.decodeIfPresent(String.self, forKey: .palette)).flatMap { $0 } ?? BotPalette.all[0].id
+        accentColor = (try? c.decodeIfPresent(String.self, forKey: .accentColor)).flatMap { $0 }
+        figure = (try? c.decodeIfPresent(String.self, forKey: .figure)).flatMap { $0 }.flatMap(KemoSabeLook.init(rawValue:))
+        pet = (try? c.decodeIfPresent(String.self, forKey: .pet)).flatMap { $0 }
+        petName = (try? c.decodeIfPresent(String.self, forKey: .petName)).flatMap { $0 }
+        petImage = (try? c.decodeIfPresent(Data.self, forKey: .petImage)).flatMap { $0 }
         self = normalized()
     }
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(shape, forKey: .shape)
         try c.encode(palette, forKey: .palette)
-        try c.encode(eyes, forKey: .eyes)
-        try c.encode(prop, forKey: .prop)
-        try c.encode(topper, forKey: .topper)
-        try c.encodeIfPresent(bodyColor, forKey: .bodyColor)
         try c.encodeIfPresent(accentColor, forKey: .accentColor)
-        try c.encode(expression, forKey: .expression)
-        try c.encode(accessory, forKey: .accessory)
-        try c.encode(blush, forKey: .blush)
-        try c.encode(scale, forKey: .scale)
-        try c.encode(ring, forKey: .ring)
-        try c.encodeIfPresent(ringColor, forKey: .ringColor)
-    }
-
-    /// Two bots look alike when their shape and palette match: the rest is too small to tell apart.
-    public func sameCharacter(as other: BotLook) -> Bool { shape == other.shape && palette == other.palette }
-
-    /// A random character unlike every one in `taken`: a shape, palette, and topper no other bot has
-    /// while there are some left, eyes at random, and a prop that suits its starter.
-    public static func random(for starter: BotStarter = .custom, taken: [BotLook], using rng: inout some RandomNumberGenerator) -> BotLook {
-        func fresh<T: Hashable>(_ all: [T], used: [T]) -> [T] {
-            let free = all.filter { !used.contains($0) }
-            return free.isEmpty ? all : free
-        }
-        let bright = BotPalette.bright.map(\.id)
-        for _ in 0..<64 {
-            let shape = fresh(Shape.allCases, used: taken.map(\.shape)).randomElement(using: &rng) ?? .bean
-            let palette = fresh(bright, used: taken.map(\.palette)).randomElement(using: &rng) ?? bright[0]
-            let prop = starter.props.randomElement(using: &rng) ?? .none
-            var toppers: [Topper] = [.ears, .roundEars, .antenna, .tuft, .leaf, .none]
-            if prop == .headset { toppers.removeAll { $0 == .ears || $0 == .roundEars } }
-            if prop == .antenna { toppers.removeAll { $0 == .antenna } }
-            let topper: Topper = prop == .hardHat ? .none : fresh(toppers, used: taken.map(\.topper)).randomElement(using: &rng) ?? .none
-            let eyes: Eyes = prop == .hardHat ? .visor : [Eyes.dots, .ovals, .sparkle].randomElement(using: &rng) ?? .dots
-            let look = BotLook(shape: shape, palette: palette, eyes: eyes, prop: prop, topper: topper)
-            if !taken.contains(where: { $0.sameCharacter(as: look) }) { return look }
-        }
-        // Every quick pick collided (a very full dock): walk the combinations for one that's free.
-        for shape in Shape.allCases {
-            for palette in BotPalette.all.map(\.id) {
-                let look = BotLook(shape: shape, palette: palette, eyes: .dots)
-                if !taken.contains(where: { $0.sameCharacter(as: look) }) { return look }
-            }
-        }
-        return BotLook(shape: .bean, palette: bright[0], eyes: .dots)
-    }
-
-    /// Rerolls the character (a new shape, palette, eyes, topper, and prop) and keeps what the owner
-    /// set by hand: their colors, expression, accessory, cheeks, and dock size and ring.
-    public func rerolled(for starter: BotStarter = .custom, taken: [BotLook], using rng: inout some RandomNumberGenerator) -> BotLook {
-        var next = BotLook.random(for: starter, taken: taken + [self], using: &rng)
-        next.bodyColor = bodyColor; next.accentColor = accentColor; next.expression = expression; next.accessory = accessory
-        next.blush = blush; next.scale = scale; next.ring = ring; next.ringColor = ringColor
-        return next
-    }
-
-    /// A character for a bot from what its name and job say it does: a prop for its job (homework and
-    /// class get a pencil, code a hard hat with a visor, research glasses, design a paintbrush, ops a
-    /// wrench, calls a headset, writing a book), and a shape, palette, and topper no other bot has while
-    /// some are left (never KemoSabe's own palette or the quiet grays). The same words give the same
-    /// character, so a form's preview doesn't jump while the owner types.
-    public static func suggested(name: String, job: String, taken: [BotLook] = []) -> BotLook {
-        let words = (name + " " + job).lowercased()
-        func has(_ keys: [String]) -> Bool { keys.contains { words.contains($0) } }
-        let prop: Prop =
-            has(["homework", "class", "study", "school", "exam", "essay", "notes", "deadline"]) ? .pencil :
-            has(["code", "coder", "dev", "app", "bug", "build", "engineer", "ios", "swift"]) ? .hardHat :
-            has(["research", "paper", "read", "thesis", "learn"]) ? .glasses :
-            has(["site", "web", "design", "art", "draw", "logo"]) ? .paintbrush :
-            has(["fix", "repair", "ops", "server", "deploy", "infra"]) ? .wrench :
-            has(["music", "podcast", "call", "meeting", "voice", "support"]) ? .headset :
-            has(["book", "writing", "writer", "journal", "story", "blog"]) ? .book : .none
-        var seed = UInt64(5381)
-        for byte in name.lowercased().utf8 { seed = seed &* 33 &+ UInt64(byte) }
-        let shapes = Shape.allCases, eyes: [Eyes] = [.dots, .ovals, .sparkle]
-        let usedPalettes = Set(taken.map(\.palette)), usedShapes = Set(taken.map(\.shape))
-        let bright = BotPalette.bright.map(\.id)
-        let freePalettes = bright.filter { !usedPalettes.contains($0) }
-        let palettes = freePalettes.isEmpty ? bright : freePalettes
-        let freeShapes = shapes.filter { !usedShapes.contains($0) }
-        let shapePool = freeShapes.isEmpty ? shapes : freeShapes
-        var toppers: [Topper] = [.ears, .roundEars, .antenna, .tuft, .leaf]
-        if prop == .headset { toppers.removeAll { $0 == .ears || $0 == .roundEars } }
-        let usedToppers = Set(taken.map(\.topper))
-        let freeToppers = toppers.filter { !usedToppers.contains($0) }
-        let topperPool = freeToppers.isEmpty ? toppers : freeToppers
-        return BotLook(shape: shapePool[Int(seed % UInt64(shapePool.count))],
-                       palette: palettes[Int((seed / 7) % UInt64(palettes.count))],
-                       eyes: prop == .hardHat ? .visor : eyes[Int((seed / 13) % UInt64(eyes.count))],
-                       prop: prop,
-                       topper: prop == .hardHat ? .none : topperPool[Int((seed / 17) % UInt64(topperPool.count))])
+        try c.encodeIfPresent(figure?.rawValue, forKey: .figure)
+        try c.encodeIfPresent(pet, forKey: .pet)
+        try c.encodeIfPresent(petName, forKey: .petName)
+        try c.encodeIfPresent(petImage, forKey: .petImage)
     }
 }
 
-/// A named color to pick from: KemoSabe's colors, and the custom colors any other bot can wear.
-/// Stock names never use another company's name.
+/// A named color. Only KemoSabe's ten old accent colors are left: a KemoSabe saved with one takes the palette
+/// `BotPalette.forAccent` maps it to. Stock names never use another company's name.
 public struct BotTint: Hashable, Sendable, Identifiable {
     public let id: String
     public let name: String
     /// Six hex digits, uppercase ("EF705B").
     public let hex: String
 
-    /// KemoSabe's colors: coral (its own) first.
+    /// The ten accent colors KemoSabe had before it had palettes (coral, its own, first).
     public static let kemoSabe: [BotTint] = [
         .init(id: "coral", name: "Coral", hex: "EF705B"),
         .init(id: "tangerine", name: "Tangerine", hex: "F08A3C"),
@@ -303,17 +130,6 @@ public struct BotTint: Hashable, Sendable, Identifiable {
         .init(id: "rose", name: "Rose", hex: "D45C86"),
         .init(id: "slate", name: "Slate", hex: "66707E")
     ]
-    /// Colors for a bot's body, accent, or ring, beside its palette's own.
-    public static let custom: [BotTint] = kemoSabe + [
-        .init(id: "cream", name: "Cream", hex: "F5E7CF"),
-        .init(id: "mint", name: "Mint", hex: "BFE8D3"),
-        .init(id: "lilac", name: "Lilac", hex: "DCCFF3"),
-        .init(id: "blush", name: "Blush", hex: "F6CFD6"),
-        .init(id: "lemon", name: "Lemon", hex: "F7E79B"),
-        .init(id: "ice", name: "Ice", hex: "D3E6F5"),
-        .init(id: "charcoal", name: "Charcoal", hex: "3B3F47"),
-        .init(id: "snow", name: "Snow", hex: "F7F5F1")
-    ]
 
     /// Six hex digits, uppercase, or nil when `value` isn't a color ("#ef705b" becomes "EF705B").
     public static func normalized(_ value: String) -> String? {
@@ -321,15 +137,11 @@ public struct BotTint: Hashable, Sendable, Identifiable {
         guard digits.count == 6, digits.allSatisfy({ $0.isHexDigit }) else { return nil }
         return digits
     }
-    /// The named color with this hex, if it's one of `custom`.
-    public static func named(hex: String?) -> BotTint? {
-        guard let hex = hex.flatMap(normalized) else { return nil }
-        return custom.first { $0.hex == hex }
-    }
 }
 
-/// A character palette: body, accent, and background colors as hex. Stock names never use another
-/// company's name.
+/// One of KemoSabe's companion palettes: body, accent, and background colors as hex. On the two-tone look the
+/// body is its light half and the accent its dark half; on the cloud, its body and its coral paint. Stock names
+/// never use another company's name.
 public struct BotPalette: Hashable, Sendable, Identifiable {
     public let id: String
     public let name: String
@@ -358,12 +170,65 @@ public struct BotPalette: Hashable, Sendable, Identifiable {
         .init(id: "lagoon", name: "Lagoon", body: "A7DCD8", accent: "235D70", background: "112B34"),
         .init(id: "mulberry", name: "Mulberry", body: "CFA3CA", accent: "663C6B", background: "2F1D33"),
         .init(id: "ink", name: "Ink", body: "7685B6", accent: "FFF0CF", background: "121827"),
-        .init(id: "paper", name: "Paper", body: "EEECE2", accent: "353D4C", background: "1A202B")
+        .init(id: "paper", name: "Paper", body: "EEECE2", accent: "353D4C", background: "1A202B"),
+        // The two-tone look's own colors: a white half and a blue half (October 7, 2026).
+        .init(id: "classic", name: "Classic", body: "F6F8FB", accent: "2F7DF6", background: "14243D")
     ]
-    /// The palettes a new bot may get at random: never KemoSabe's own or the quiet grays.
-    public static let bright: [BotPalette] = all.filter { !["apricot", "graphite", "porcelain", "paper", "midnight", "ink"].contains($0.id) }
-    /// A palette by ID, or KemoSabe's when it's unknown.
+    /// A palette by ID, or Apricot when it's unknown.
     public static func named(_ id: String) -> BotPalette { all.first { $0.id == id } ?? all[0] }
+
+    // MARK: KemoSabe's companion palettes (the old KemoSabe app's `BotTheme` presets and `ThemeShelf`)
+
+    /// The palettes KemoSabe's editor offers: each look's own palette first (Apricot for the cloud, Classic for the
+    /// two-tone look), then the old app's featured eight, then the rest. Blueberry isn't offered (as in the old app)
+    /// but stays valid for a KemoSabe saved with it.
+    public static let companion: [BotPalette] = {
+        let featured = ["apricot", "classic", "matcha", "lavender", "sky", "rose", "aurora", "cocoa", "graphite"]
+        return featured.map(named) + all.filter { !featured.contains($0.id) && $0.id != "blueberry" }
+    }()
+
+    /// Where each of KemoSabe's ten old accent colors goes.
+    static let legacyTints: [String: String] = [
+        "EF705B": "apricot",   // Coral
+        "F08A3C": "peach",     // Tangerine
+        "D9A23A": "butter",    // Honey
+        "6E9B6A": "pistachio", // Sage
+        "2F8F8B": "lagoon",    // Teal
+        "3F86C6": "sky",       // Sky
+        "6F63C9": "lavender",  // Iris
+        "9A4F96": "mulberry",  // Plum
+        "D45C86": "rose",      // Rose
+        "66707E": "graphite"   // Slate
+    ]
+
+    /// The companion palette for an accent color: the palette with exactly that accent, the one an old
+    /// KemoSabe color maps to, else the offered palette whose accent is nearest.
+    public static func forAccent(_ hex: String) -> BotPalette {
+        guard let hex = BotTint.normalized(hex) else { return all[0] }
+        if let exact = all.first(where: { $0.accent == hex }) { return exact }
+        if let id = legacyTints[hex] { return named(id) }
+        func rgb(_ value: String) -> (Double, Double, Double) {
+            let n = UInt32(value, radix: 16) ?? 0
+            return (Double((n >> 16) & 255), Double((n >> 8) & 255), Double(n & 255))
+        }
+        let target = rgb(hex)
+        func distance(_ palette: BotPalette) -> Double {
+            let c = rgb(palette.accent)
+            // Weighted RGB ("redmean"), close enough to how far apart two colors look.
+            let r = (target.0 + c.0) / 2, dr = target.0 - c.0, dg = target.1 - c.1, db = target.2 - c.2
+            return (2 + r / 256) * dr * dr + 4 * dg * dg + (2 + (255 - r) / 256) * db * db
+        }
+        return companion.min { distance($0) < distance($1) } ?? all[0]
+    }
+
+    /// KemoSabe's palette from a saved look: its palette, unless an accent color that isn't that palette's
+    /// says it was saved with an old accent color (then the palette for that color).
+    public static func companion(palette id: String, accent: String?) -> BotPalette {
+        let known = all.first { $0.id == id }
+        guard let accent = accent.flatMap(BotTint.normalized) else { return known ?? all[0] }
+        if let known, known.accent == accent { return known }
+        return forAccent(accent)
+    }
 }
 
 /// A random number generator that can be seeded, for tests and previews (SplitMix64).
@@ -377,26 +242,5 @@ public struct SeededGenerator: RandomNumberGenerator, Sendable {
         z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
         return z ^ (z >> 31)
-    }
-}
-
-/// Fun, original names for new bots: none is a product, a company, or a well-known assistant.
-public enum BotNames {
-    public static let pool = [
-        "Pip", "Bramble", "Tofu", "Pickle", "Nimbus", "Sprocket", "Biscuit", "Fennel", "Juniper", "Waffles",
-        "Noodle", "Marzipan", "Clover", "Puddle", "Zephyr", "Doodle", "Quill", "Basil", "Toffee", "Wobble",
-        "Ziggy", "Momo", "Sunny", "Kiwi", "Taro", "Miso", "Nugget", "Fizz", "Button", "Scout",
-        "Skipper", "Dumpling", "Pretzel", "Maple", "Olive", "Peanut", "Tumble", "Hopper", "Whisk", "Gizmo",
-        "Bumble", "Crumpet", "Dewdrop", "Figgy", "Jellybean", "Lentil", "Mallow", "Nutmeg", "Parsnip", "Radish"
-    ]
-    /// A name no bot has (ignoring case), at random; once they're all taken, one with a number.
-    public static func next(taken: [String], using rng: inout some RandomNumberGenerator) -> String {
-        let used = Set(taken.map { $0.lowercased() })
-        let free = pool.filter { !used.contains($0.lowercased()) }
-        if let name = free.randomElement(using: &rng) { return name }
-        let base = pool.randomElement(using: &rng) ?? "Bot"
-        var number = 2
-        while used.contains("\(base) \(number)".lowercased()) { number += 1 }
-        return "\(base) \(number)"
     }
 }

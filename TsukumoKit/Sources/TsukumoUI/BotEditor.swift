@@ -1,10 +1,11 @@
 import SwiftUI
 import TsukumoCore
+import TsukumoVoice
 
-// Make a bot (ported from the dock's add-bot logic and per-bot form): what runs it comes first; then a
-// fun name you can change and a random character you can reroll, shown live at the top; then grouped
-// drawers, closed to start: Look, Personality, Brain, Context, Permissions, and Dock. KemoSabe has its
-// own short sheet (`KemoSabeEditor`): its color is the one thing to change.
+// One of the owner's bots, on the iPhone (October 8, 2026): who it is (its name, job, what the owner tells it, its
+// character), what it runs on (a bot made here: an engine this device has), and how it works for the owner: its model
+// and effort, its voice, how private an answer KemoSabe may give it, and what it may do. The same sheet makes a new
+// bot (`isNew`). KemoSabe has its own sheet (`KemoSabeEditor`). The Mac's dock shows the same groups in its bot panel.
 
 /// Something a bot can run on, as the app offers it.
 public struct EngineChoice: Identifiable, Hashable, Sendable {
@@ -16,254 +17,189 @@ public struct EngineChoice: Identifiable, Hashable, Sendable {
     public var wire: EffortCatalog.Wire?
     /// Nil when it can run here; otherwise why not ("Coding agents run on a Mac.").
     public var unavailable: String?
+    /// Models' names to show, by ID ("opus" is "Opus 5.5"); a model without one shows its ID.
+    public var modelNames: [String: String]
+    /// The efforts each model takes, by ID, when the engine said (a coding agent's own list); otherwise `wire` decides.
+    public var modelEfforts: [String: [Effort]]
     public var id: String { engine.key }
 
-    public init(engine: EngineID, info: EngineInfo, models: [String] = [], wire: EffortCatalog.Wire? = nil, unavailable: String? = nil) {
+    public init(engine: EngineID, info: EngineInfo, models: [String] = [], wire: EffortCatalog.Wire? = nil, unavailable: String? = nil,
+                modelNames: [String: String] = [:], modelEfforts: [String: [Effort]] = [:]) {
         self.engine = engine; self.info = info; self.models = models; self.wire = wire; self.unavailable = unavailable
+        self.modelNames = modelNames; self.modelEfforts = modelEfforts
+    }
+
+    /// What a model is called here.
+    public func name(of model: String) -> String { modelNames[model] ?? model }
+    /// The efforts a model takes (nil: the engine's first model).
+    public func efforts(for model: String?) -> [Effort] {
+        let model = model ?? models.first ?? ""
+        if let listed = modelEfforts[model] { return listed }
+        return wire.map { EffortCatalog.efforts(wire: $0, model: model) } ?? []
+    }
+    /// An effort carried to another model: kept when that model takes it.
+    public func accepted(_ effort: Effort?, model: String?) -> Effort? {
+        guard let effort, efforts(for: model).contains(effort) else { return nil }
+        return effort
     }
 }
 
-/// The sheet that makes a new bot, or edits one (`editing`). Editing KemoSabe shows `KemoSabeEditor`.
-public struct BotEditor: View {
-    let existing: [BotSpec]
+/// The sheet for a bot in Settings, Bots: KemoSabe's palette and voice, or one of the owner's bots' settings.
+public struct BotSettingsSheet: View {
+    let bot: BotSpec
     let engines: [EngineChoice]
-    let editing: BotSpec?
-    /// The device's name, for KemoSabe's sheet ("iPhone").
     let device: String
-    /// Where KemoSabe's privacy settings are on this device, for its sheet.
     let kemoSabeNote: String?
-    let onSave: (BotSpec) -> Void
+    /// More of KemoSabe's settings, as Form sections below its voice (the bots it answers, its journal).
+    let kemoSabeMore: AnyView?
+    let isNew: Bool
+    let onSave: (BotSpec) -> String?
+    let onRemove: (() -> Void)?
     let onCancel: () -> Void
-    @State private var path: [Draft] = []
-    @State private var rng: SeededGenerator
-
-    /// A new bot on its way to the form, with the dice it was rolled with.
-    struct Draft: Hashable {
-        var bot: BotSpec
-        var seed: UInt64
+    /// `onSave` returns the problem to show, or nil once it's saved. `onRemove` offers Remove (not for KemoSabe or a new bot).
+    public init(bot: BotSpec, engines: [EngineChoice], device: String = "iPhone", kemoSabeNote: String? = nil, kemoSabeMore: AnyView? = nil,
+                isNew: Bool = false, onSave: @escaping (BotSpec) -> String?, onRemove: (() -> Void)? = nil, onCancel: @escaping () -> Void) {
+        self.bot = bot; self.engines = engines; self.device = device; self.kemoSabeNote = kemoSabeNote; self.kemoSabeMore = kemoSabeMore; self.isNew = isNew
+        self.onSave = onSave; self.onRemove = onRemove; self.onCancel = onCancel
     }
-
-    /// `seed` makes the dice repeatable (tests and screenshots).
-    public init(existing: [BotSpec], engines: [EngineChoice], editing: BotSpec? = nil, seed: UInt64? = nil, device: String = "iPhone",
-                kemoSabeNote: String? = nil, onSave: @escaping (BotSpec) -> Void, onCancel: @escaping () -> Void) {
-        self.existing = existing; self.engines = engines; self.editing = editing; self.device = device; self.kemoSabeNote = kemoSabeNote
-        self.onSave = onSave; self.onCancel = onCancel
-        _rng = State(initialValue: seed.map(SeededGenerator.init(seed:)) ?? SeededGenerator())
-    }
-
     public var body: some View {
-        if let editing, editing.isKemoSabe {
-            KemoSabeEditor(bot: editing, device: device, note: kemoSabeNote, onSave: onSave, onCancel: onCancel)
+        if bot.isKemoSabe {
+            KemoSabeEditor(bot: bot, device: device, note: kemoSabeNote, more: kemoSabeMore, onSave: { _ = onSave($0) }, onCancel: onCancel)
         } else {
-            NavigationStack(path: $path) {
-                Group {
-                    if let editing {
-                        form(editing, seed: 1, isNew: false)
-                    } else {
-                        enginePicker
-                    }
-                }
-                .navigationDestination(for: Draft.self) { draft in form(draft.bot, seed: draft.seed, isNew: true) }
-            }
+            BotEditor(bot: bot, engines: engines, device: device, isNew: isNew, onSave: onSave, onRemove: onRemove, onCancel: onCancel)
         }
-    }
-
-    // MARK: Step 1: what runs it
-
-    private var enginePicker: some View {
-        List {
-            Section {
-                ForEach(engines) { choice in
-                    Button {
-                        var generator = rng
-                        var bot = BotSpec.new(engine: choice.engine, existing: existing, using: &generator)
-                        bot.model = choice.models.first
-                        let next = generator.next()
-                        rng = generator
-                        path = [Draft(bot: bot, seed: next)]
-                    } label: {
-                        HStack(spacing: 12) {
-                            EngineMarkView(choice.info.mark, size: 26).frame(width: 34)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(choice.info.title).font(.body.weight(.medium))
-                                Text(choice.unavailable ?? choice.info.detail).font(.footnote).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if choice.unavailable == nil { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.tertiary) }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(choice.unavailable != nil)
-                    .opacity(choice.unavailable == nil ? 1 : 0.55)
-                    .accessibilityIdentifier("engine-" + choice.info.title)
-                }
-            } header: {
-                Text("What runs it?")
-            } footer: {
-                Text("Apple on-device keeps every word on this device. An API model gets only what you allow, and asks KemoSabe for anything personal.")
-            }
-        }
-        .navigationTitle("New bot")
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }
-        }
-    }
-
-    // MARK: Step 2: the bot
-
-    private func form(_ bot: BotSpec, seed: UInt64, isNew: Bool) -> some View {
-        BotForm(initial: bot, existing: existing.filter { $0.id != bot.id }, engines: engines,
-                isNew: isNew, seed: seed, onSave: onSave, onCancel: onCancel)
     }
 }
 
-/// A bot's own fields: a live preview on top, then grouped drawers.
-struct BotForm: View {
+/// One of the owner's bots: its character and name on top, then Who It Is, Brain, Voice, Context, and Permissions.
+public struct BotEditor: View {
     @State private var bot: BotSpec
-    let existing: [BotSpec]
-    let engines: [EngineChoice]
-    let isNew: Bool
-    @State private var rng: SeededGenerator
-    let onSave: (BotSpec) -> Void
-    let onCancel: () -> Void
     @State private var problem: String?
-    @State private var starter: BotStarter = .custom
-    @Environment(\.colorScheme) private var scheme
+    @State private var confirmRemove = false
+    let engines: [EngineChoice]
+    let device: String
+    let isNew: Bool
+    let onSave: (BotSpec) -> String?
+    let onRemove: (() -> Void)?
+    let onCancel: () -> Void
     @Environment(\.engineInfo) private var engineInfo
+    @Environment(\.voice) private var voice
+    @Environment(\.codexPets) private var pets
+    @State private var characterOpen = false
 
-    init(initial: BotSpec, existing: [BotSpec], engines: [EngineChoice], isNew: Bool, seed: UInt64,
-         onSave: @escaping (BotSpec) -> Void, onCancel: @escaping () -> Void) {
-        _bot = State(initialValue: initial)
-        _rng = State(initialValue: SeededGenerator(seed: seed))
-        self.existing = existing; self.engines = engines; self.isNew = isNew; self.onSave = onSave; self.onCancel = onCancel
+    public init(bot: BotSpec, engines: [EngineChoice], device: String = "iPhone", isNew: Bool = false,
+                onSave: @escaping (BotSpec) -> String?, onRemove: (() -> Void)? = nil, onCancel: @escaping () -> Void) {
+        _bot = State(initialValue: bot)
+        self.engines = engines; self.device = device; self.isNew = isNew
+        self.onSave = onSave; self.onRemove = onRemove; self.onCancel = onCancel
     }
 
     private var choice: EngineChoice? { engines.first { $0.engine == bot.engine } }
-    private var efforts: [Effort] {
-        guard let wire = choice?.wire else { return [] }
-        return EffortCatalog.efforts(wire: wire, model: bot.model ?? choice?.models.first ?? "")
-    }
 
-    var body: some View {
-        Form {
-            Section {
-                VStack(spacing: 12) {
-                    character
-                    HStack(spacing: 8) {
-                        TextField("Name", text: $bot.name)
-                            .font(.title2.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                            .accessibilityIdentifier("botName")
-                        Button {
-                            var generator = rng
-                            bot.name = BotNames.next(taken: existing.map(\.name) + [bot.name], using: &generator)
-                            rng = generator
-                        } label: { Image(systemName: "dice") }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("New name")
-                        .accessibilityIdentifier("rerollName")
+    public var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    VStack(spacing: 8) {
+                        Button { characterOpen.toggle() } label: { BotCharacterView(bot: bot, size: 72, animated: false) }
+                            .buttonStyle(.plain).accessibilityLabel("Character")
+                        Text(bot.name.isEmpty ? "New Bot" : bot.name).font(.title2.weight(.semibold))
+                        Text(bot.engine.chats ? "Runs on " + engineInfo(bot.engine).title : bot.role)
+                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     }
-                    Label(engineInfo(bot.engine).title + (bot.role.isEmpty ? "" : " · " + bot.role), systemImage: "cpu")
-                        .font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("botHeader")
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-            }
-
-            Section {
-                DisclosureGroup("Look") {
-                    LookControls(look: $bot.look)
-                }
-                .accessibilityIdentifier("drawerLook")
-                DisclosureGroup("Personality") {
-                    Picker("Starts as", selection: $starter) {
-                        ForEach(BotStarter.allCases) { Text($0.title).tag($0) }
+                // As on the Mac (2.01's order): its AI model first, then who it is, then drawers.
+                if bot.engine.chats || isNew { Section("Brain") { brain } }
+                Section {
+                    TextField("Your name for it", text: $bot.name).accessibilityIdentifier("botName")
+                    TextField("What it does", text: $bot.role).accessibilityIdentifier("botRole")
+                    DisclosureGroup("Character", isExpanded: $characterOpen) {
+                        BotCharacterPicker(look: $bot.look, service: bot.service, pets: pets, allowsPets: bot.wearsCodexPets)
                     }
-                    .onChange(of: starter) { _, new in
-                        if new != .custom { bot.role = new.role }
-                    }
-                    TextField("Its job, in one line", text: $bot.role, axis: .vertical)
-                        .lineLimit(1...3)
-                        .accessibilityIdentifier("botRole")
-                    PersonalityControls(personality: $bot.personality)
-                }
-                .accessibilityIdentifier("drawerPersonality")
-                DisclosureGroup("Brain") { brain }
-                    .accessibilityIdentifier("drawerBrain")
-                DisclosureGroup("Context") {
-                    Picker("Most private it may get", selection: $bot.contextScope.ceiling) {
-                        ForEach(PrivacyLevel.allCases.filter { $0 != .secret }) { level in Text(level.title).tag(level) }
-                    }
-                    Text(bot.contextScope.ceiling.detail).font(.footnote).foregroundStyle(.secondary)
-                    if !bot.engine.isOnDevice {
-                        Toggle("May ask KemoSabe about you", isOn: $bot.contextScope.mayAskKemoSabe)
-                    }
-                }
-                .accessibilityIdentifier("drawerContext")
-                DisclosureGroup("Permissions") {
-                    if bot.engine.runsOnlyOnMac {
-                        Picker("In its project", selection: $bot.permissions.access) {
-                            ForEach(BotPermissions.Access.allCases) { Text($0.title).tag($0) }
+                    if bot.engine.chats {
+                        DisclosureGroup("Instructions") {
+                            TextField("What you tell it", text: $bot.instructions, axis: .vertical)
+                                .lineLimit(3...8).accessibilityIdentifier("botInstructions")
                         }
-                        Text(bot.permissions.access.detail).font(.footnote).foregroundStyle(.secondary)
                     }
-                    Toggle("Approvals in the chat", isOn: $bot.permissions.approvalsHere)
-                    Toggle("May speak up on its own", isOn: $bot.permissions.mayChirp)
-                    Toggle("Read its replies aloud", isOn: $bot.permissions.speaks)
+                } header: { Text("Details") } footer: {
+                    if let problem { Text(problem).foregroundStyle(.orange) }
                 }
-                .accessibilityIdentifier("drawerPermissions")
-                DisclosureGroup("Dock") {
-                    DockLookControls(look: $bot.look, engine: bot.engine)
-                    Text("How it sits in your Mac’s dock. It looks the same on every device you sign in on.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                if bot.engine.chats || isNew {
+                    Section {
+                        VoicePicker(bot: $bot)
+                    } header: { Text("Voice") } footer: { Text(VoicePicker.footer(voice: voice, device: device)) }
                 }
-                .accessibilityIdentifier("drawerDock")
+                Section("Context") {
+                    Toggle("May ask KemoSabe about you", isOn: $bot.contextScope.mayAskKemoSabe)
+                    if bot.contextScope.mayAskKemoSabe {
+                        Picker("KemoSabe may share up to", selection: $bot.contextScope.ceiling) {
+                            ForEach([PrivacyLevel.open, .personal, .sensitive]) { Text($0.title).tag($0) }
+                        }
+                        Text(bot.contextScope.ceiling.detail).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+                if bot.engine.chats {
+                    Section("Permissions") {
+                        if bot.engine.runsOnlyOnMac {
+                            Picker("In its project", selection: $bot.permissions.access) {
+                                ForEach(BotPermissions.Access.allCases) { Text($0.title).tag($0) }
+                            }
+                            Text(bot.permissions.access.detail).font(.footnote).foregroundStyle(.secondary)
+                        }
+                        Toggle("Speaks its replies when you talk to it", isOn: $bot.permissions.speaks)
+                    }
+                }
+                if let onRemove, !isNew {
+                    Section {
+                        Button("Remove \(bot.name)", role: .destructive) { confirmRemove = true }.accessibilityIdentifier("removeBot")
+                    } footer: {
+                        Text("It leaves your Mac’s dock too. Its chats are kept.")
+                    }
+                    .confirmationDialog("Remove \(bot.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
+                        Button("Remove", role: .destructive, action: onRemove)
+                    }
+                }
             }
-
-            if let problem {
-                Section { Label(problem, systemImage: "exclamationmark.circle").foregroundStyle(.orange) }
+            .navigationTitle(isNew ? "New Bot" : bot.name)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onCancel) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isNew ? "Add" : "Save") { problem = onSave(bot) }
+                        .fontWeight(.semibold).disabled(bot.name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityIdentifier("saveBot")
+                }
             }
         }
-        .navigationTitle(isNew ? "New bot" : bot.name)
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { if !isNew { Button("Cancel", action: onCancel) } }
-            ToolbarItem(placement: .confirmationAction) {
-                Button(isNew ? "Add" : "Save") { save() }
-                    .fontWeight(.semibold)
-                    .accessibilityIdentifier("saveBot")
-            }
-        }
+        .accessibilityIdentifier("botEditor")
     }
 
     @ViewBuilder private var brain: some View {
-        let usable = engines.filter { $0.unavailable == nil }
-        if usable.count > 1 {
+        if case .made = bot.origin, bot.id != BotSpec.claudeBotID, engines.count > 1 || isNew {
             Picker("Runs on", selection: Binding(get: { bot.engine }, set: { engine in
                 guard engine != bot.engine else { return }
-                bot.engine = engine
-                bot.model = engines.first { $0.engine == engine }?.models.first
-                bot.effort = nil
+                bot.engine = engine; bot.model = nil; bot.effort = nil
             })) {
-                ForEach(usable) { Text($0.info.title).tag($0.engine) }
+                ForEach(engines.filter { $0.unavailable == nil || $0.engine == bot.engine }) { Text($0.info.title).tag($0.engine) }
             }
             .accessibilityIdentifier("botEngine")
         } else {
             LabeledContent("Runs on", value: engineInfo(bot.engine).title)
         }
         if let models = choice?.models, models.count > 1 {
-            Picker("Model", selection: Binding(get: { bot.model ?? models[0] }, set: { bot.model = $0; bot.effort = EffortCatalog.accepted(bot.effort, wire: choice?.wire ?? .openAICompatible, model: $0) })) {
-                ForEach(models, id: \.self) { Text($0).tag($0) }
+            Picker("Model", selection: Binding(get: { bot.model ?? models[0] }, set: { bot.model = $0; bot.effort = choice?.accepted(bot.effort, model: $0) })) {
+                ForEach(models, id: \.self) { Text(choice?.name(of: $0) ?? $0).tag($0) }
             }
             .accessibilityIdentifier("botModel")
-        } else if case .api = bot.engine {
-            TextField("Model", text: Binding(get: { bot.model ?? "" }, set: { bot.model = $0 }))
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("botModel")
         }
+        let efforts = choice?.efforts(for: bot.model) ?? []
         if !efforts.isEmpty {
             Picker("Effort", selection: $bot.effort) {
                 Text("Model default").tag(Effort?.none)
@@ -271,33 +207,7 @@ struct BotForm: View {
             }
             .accessibilityIdentifier("botEffort")
         }
-        Text(bot.engine.isOnDevice ? "Runs on Apple’s on-device model: nothing leaves this device."
-             : bot.engine.runsOnlyOnMac ? "Runs on your own sign-in for that agent, on your Mac." : "Runs on a model you connected, with your key.")
+        Text(bot.engine.runsOnlyOnMac ? "Runs on your own sign-in for that agent, on your Mac." : "Runs on the model you connected, with your key.")
             .font(.footnote).foregroundStyle(.secondary)
-    }
-
-    private var character: some View {
-        let theme = TsukumoTheme(scheme)
-        return ZStack(alignment: .bottomTrailing) {
-            BotLookPreview(look: bot.look, engine: bot.engine)
-            Button {
-                var generator = rng
-                bot.look = bot.look.rerolled(for: starter, taken: existing.map(\.look), using: &generator)
-                rng = generator
-            } label: {
-                Image(systemName: "dice.fill").font(.system(size: 15, weight: .semibold)).foregroundStyle(theme.onAccent)
-                    .frame(width: 36, height: 36).background(theme.accent, in: Circle())
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("New character")
-            .accessibilityIdentifier("rerollCharacter")
-        }
-    }
-
-    private func save() {
-        switch bot.validated(existing: existing) {
-        case .success(let valid): problem = nil; onSave(valid)
-        case .failure(let failure): problem = failure.message
-        }
     }
 }

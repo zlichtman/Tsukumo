@@ -42,7 +42,7 @@ public enum DemoFixture {
 
     public static var claude: BotSpec {
         BotSpec(id: claudeID, name: "Claude", engine: .api(profile: claudeProfile), model: "claude-opus-5-5",
-                role: "Plans and researches for me", look: BotLook(shape: .gumdrop, palette: "ember", eyes: .ovals, prop: .glasses, topper: .tuft),
+                role: "Plans with you, on your Claude key", service: .claude,
                 contextScope: ContextScope(ceiling: .personal, mayAskKemoSabe: true))
     }
     public static var bots: [BotSpec] { [.kemoSabe(), claude] }

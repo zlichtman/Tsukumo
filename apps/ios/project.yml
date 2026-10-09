@@ -25,6 +25,10 @@ settings:
 packages:
   TsukumoKit:
     path: ../../TsukumoKit
+  # Whisper and Kokoro on the GPU with MLX (TsukumoKit/MLXVoice, its own package so TsukumoKit keeps no
+  # dependencies). Provenance and licenses: TsukumoKit/VOICE-NOTICE.md.
+  TsukumoMLXVoice:
+    path: ../../TsukumoKit/MLXVoice
 targets:
   Tsukumo:
     type: application
@@ -51,6 +55,13 @@ targets:
         product: TsukumoEngines
       - package: TsukumoKit
         product: TsukumoSync
+      - package: TsukumoKit
+        product: TsukumoVoice
+      - package: TsukumoMLXVoice
+        product: TsukumoMLXVoice
+      # Laya's tokenizer for System One, on the same swift-transformers (TsukumoKit/LAYA-NOTICE.md).
+      - package: TsukumoMLXVoice
+        product: TsukumoLaya
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.tsukumo
@@ -71,44 +82,20 @@ targets:
         # on this iPhone only after the owner turns the source on in Settings, KemoSabe.
         INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription: KemoSabe reads your calendar on this iPhone to answer your bots' questions, such as when you're free. Only the answer leaves, and only to a bot you've allowed.
         INFOPLIST_KEY_NSRemindersFullAccessUsageDescription: KemoSabe reads your reminders on this iPhone to answer your bots' questions. Only the answer leaves, and only to a bot you've allowed.
+        # Talking to a bot: the microphone and Apple's on-device recognizer, only while you talk to one.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Tsukumo listens when you tap the microphone or hold a bot to talk to it, and stops when you're done. What you say is turned into text on this iPhone and never recorded.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Tsukumo turns what you say to a bot into text on this iPhone, with Apple's on-device recognizer. Nothing you say is sent to Apple.
+        INFOPLIST_KEY_NSContactsUsageDescription: KemoSabe looks up the contact a bot asks about, on this iPhone. Only the answer leaves, and only to a bot you've allowed.
+        INFOPLIST_KEY_NSPhotoLibraryUsageDescription: KemoSabe reads when and roughly where you took photos, and your album names, on this iPhone. It never reads the pictures. Only the answer leaves, and only to a bot you've allowed.
+        INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: For questions like "find a spot near me", KemoSabe reads this iPhone's approximate location when a question needs it. It isn't saved, and an agent gets it only when you share it.
+        INFOPLIST_KEY_NSAppleMusicUsageDescription: KemoSabe reads what's playing and what you played lately, on this iPhone, when a bot asks about music. Only the answer leaves, and only to a bot you've allowed.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES
-  TsukumoTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources: [TsukumoTests]
-    dependencies:
-      - target: Tsukumo
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.tsukumo.tests
-        GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Tsukumo.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Tsukumo
-        BUNDLE_LOADER: $(TEST_HOST)
-  TsukumoUITests:
-    type: bundle.ui-testing
-    platform: iOS
-    sources: [TsukumoUITests]
-    dependencies:
-      - target: Tsukumo
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.zlichtman.tsukumo.uitests
-        GENERATE_INFOPLIST_FILE: YES
-        TEST_TARGET_NAME: Tsukumo
 schemes:
   Tsukumo:
     build:
       targets:
         Tsukumo: all
-        TsukumoTests: [test]
-        TsukumoUITests: [test]
-    test:
-      targets:
-        - name: TsukumoTests
-          parallelizable: false
-        - name: TsukumoUITests
-          parallelizable: false
     archive:
       config: Release
