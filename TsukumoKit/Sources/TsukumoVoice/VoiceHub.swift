@@ -454,7 +454,7 @@ public struct VoiceStatusLine: Equatable, Sendable {
     }
 }
 
-/// The words both apps' Voice settings use, so the iPhone's and the Mac's say the same (AGENTS.md rule 9).
+/// The words both apps' Voice settings use, so the iPhone's and the Mac's say the same (AGENTS.md rule 8).
 public enum VoiceCopy {
     /// The cards, in order.
     public static let listening = "Listening", speaking = "Speaking", models = "Better voice models", voices = "Voices", talking = "Talking to a bot"

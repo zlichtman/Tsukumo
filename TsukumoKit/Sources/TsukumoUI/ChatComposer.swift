@@ -2,13 +2,19 @@ import SwiftUI
 import TsukumoCore
 import TsukumoVoice
 
-/// The composer: the message, the bots it goes to (chips you tap, or "@name" in the text), and send.
-/// With nobody tagged, the placeholder names who gets it ("Message Claude…").
+/// The composer (design/UI-GUIDE.md, The composer): the chat's bots as chips you tap to tag (or "@name" in the text)
+/// and hold to talk to, the message, and one row in thumb reach: the model chip (the bot it goes to, its model and
+/// power; it opens the model sheet), your chats, a new chat, the microphone, and send. With nobody tagged, the
+/// placeholder names who gets it ("Message Claude…").
 public struct ChatComposer: View {
     @Bindable var session: ChatSession
     @FocusState private var focused: Bool
     @Environment(\.colorScheme) private var scheme
     @Environment(\.voice) private var voice
+    @Environment(\.composerActions) private var actions
+    @Environment(\.engineInfo) private var engineInfo
+    /// The bot the model sheet is open for.
+    @State private var tuning: BotSpec?
     /// The bot being held to talk (press and hold its chip); its tap then doesn't tag it.
     @State private var holding: UUID?
 
@@ -50,9 +56,18 @@ public struct ChatComposer: View {
                     .accessibilityIdentifier("voiceProblem")
             }
             VStack(alignment: .leading, spacing: 10) {
+                if session.threadBots.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(session.threadBots) { bot in chip(bot, theme: theme) }
+                        }
+                        .padding(.horizontal, 10)
+                    }
+                    .padding(.top, 10)
+                }
                 if let listening, listening.phase.isLive {
                     ListeningStrip(listener: listening)
-                        .padding(.horizontal, 16).padding(.top, 14)
+                        .padding(.horizontal, 16).padding(.top, session.threadBots.count > 1 ? 0 : 14)
                 } else {
                     TextField(session.placeholder, text: $session.draft, axis: .vertical)
                         .lineLimit(1...6)
@@ -61,14 +76,21 @@ public struct ChatComposer: View {
                         .focused($focused)
                         .submitLabel(.send)
                         .onSubmit(send)
-                        .padding(.horizontal, 16).padding(.top, 16)
+                        .padding(.horizontal, 16).padding(.top, session.threadBots.count > 1 ? 2 : 16)
                         .accessibilityIdentifier("chatInput")
                 }
                 HStack(spacing: 8) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(session.threadBots) { bot in chip(bot, theme: theme) }
-                        }
+                    if let actions, let bot = session.recipients.first ?? session.threadBots.first {
+                        modelChip(bot, actions: actions, theme: theme)
+                    } else if session.threadBots.count <= 1 {
+                        ForEach(session.threadBots) { bot in chip(bot, theme: theme) }
+                    }
+                    Spacer(minLength: 0)
+                    if let actions {
+                        ControlCircle("Your chats", systemImage: "bubble.left.and.bubble.right") { focused = false; actions.showConversations() }
+                            .accessibilityIdentifier("openConversations")
+                        ControlCircle("New chat", systemImage: "square.and.pencil") { focused = false; actions.newChat() }
+                            .accessibilityIdentifier("newChat")
                     }
                     if let voice { ComposerMicButton(session: session, voice: voice) }
                     sendButton(theme)
@@ -81,6 +103,31 @@ public struct ChatComposer: View {
             }
             .background(theme.fill, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(theme.ink.opacity(focused ? 0.16 : 0.08)))
+        }
+    }
+
+    /// The bot the message goes to, its model, and its power ("Opus 5.5 · High"); it opens the model sheet.
+    private func modelChip(_ bot: BotSpec, actions: ComposerActions, theme: TsukumoTheme) -> some View {
+        let choice = actions.engines().first { $0.engine == bot.engine }
+        let title: String = bot.isKemoSabe ? "On-device" : choice?.shortName(bot.model) ?? engineInfo(bot.engine).title
+        let power = bot.effort.map { EffortWeight.title($0.rawValue) }
+        return Button { focused = false; tuning = bot } label: {
+            HStack(spacing: 6) {
+                if bot.isKemoSabe { Image(systemName: "lock.fill").font(.system(size: 11, weight: .semibold)) }
+                else { EngineMarkView(engineInfo(bot.engine).mark, size: 16) }
+                Text(power.map { title + " · " + $0 } ?? title).tsukumoFont(.subheadline, weight: .medium).lineLimit(1)
+                if bot.fast { Image(systemName: "hare.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(theme.accent) }
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)).foregroundStyle(theme.secondary)
+            }
+            .padding(.horizontal, 12).frame(height: TsukumoMetrics.control)
+            .background(theme.ink.opacity(scheme == .dark ? 0.08 : 0.06), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableButtonStyle())
+        .accessibilityLabel("Model for \(bot.name), \(title)" + (power.map { ", power " + $0 } ?? ""))
+        .accessibilityIdentifier("modelChip")
+        .sheet(item: $tuning) { bot in
+            ModelSheet(bot: bot, bots: session.threadBots.filter { !$0.isBroughtIn }, actions: actions).fittedSheet()
         }
     }
 

@@ -1,7 +1,7 @@
 import Foundation
 import TsukumoCore
 
-// Settings on both devices come from this one catalog (AGENTS.md rule 9): its pages, in order and with the same
+// Settings on both devices come from this one catalog (AGENTS.md rule 8): its pages, in order and with the same
 // names, which device has each, and what's on them, for the search at the top of Settings. A page's own view still
 // lives with its app; the catalog says where each thing is, so search finds it the same way on the Mac and iPhone.
 
@@ -133,7 +133,7 @@ public enum SettingsCatalog {
                     Topic("Spoken replies", .models, tab: .voice, keywords: ["speak", "pace", "speed", "read aloud", "voice"]),
                     Topic("Each bot’s voice", .models, tab: .voice, keywords: ["voices", "kokoro", "apple voice", "sound"])]
         case .connections:
-            return [Topic("Sources", .connections, sources: true, keywords: ["what kemosabe may read", "calendar", "contacts", "messages", "photos", "location",
+            return [Topic("Sources", .connections, sources: true, keywords: ["what kemosabe may read", "contacts", "messages", "photos", "location",
                                                                            "music", "reminders", "files", "folders", "connectors", "accounts", "privacy",
                                                                            "levels", "device only", "secret", "sensitive"])]
         case .gateway:

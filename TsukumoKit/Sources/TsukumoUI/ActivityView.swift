@@ -45,24 +45,16 @@ public struct ActivityFeed: View {
     public var body: some View {
         List {
             Section {
-                Picker("Show", selection: $filter) {
-                    ForEach(Filter.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-                .accessibilityIdentifier("activityFilter")
+                TsukumoSegmented(Filter.allCases.map { ($0, $0.title) }, selection: $filter)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .accessibilityIdentifier("activityFilter")
             }
             if shown.isEmpty {
                 Section {
-                    VStack(spacing: 8) {
-                        Image(systemName: "list.bullet.rectangle").font(.largeTitle).foregroundStyle(.secondary)
-                        Text("Nothing yet").font(.headline)
-                        Text("When a bot asks KemoSabe something, System One picks a bot, or a bot finishes work, it shows here.")
-                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 24)
-                    .listRowBackground(Color.clear)
+                    TsukumoEmptyState("Nothing yet", systemImage: "list.bullet.rectangle",
+                                      message: "When a bot asks KemoSabe something, System One picks a bot, or a bot finishes work, it shows here.")
+                        .listRowBackground(Color.clear)
                 }
             }
             ForEach(days, id: \.0) { day, entries in
@@ -73,8 +65,10 @@ public struct ActivityFeed: View {
                             .disabled(onOpen == nil || item.threadID == nil)
                     }
                 }
+                .tsukumoRows()
             }
         }
+        .tsukumoScreen()
         .accessibilityIdentifier("activityList")
     }
 

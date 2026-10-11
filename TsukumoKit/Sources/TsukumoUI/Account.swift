@@ -199,7 +199,7 @@ public struct AccountSummary: View {
             VStack(spacing: 6) {
                 Text("Your bots, on every device").font(.system(size: 22, weight: .bold)).multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
-                Text("Sign in with Apple and your bots and chats stay in step on your iPhone and Mac, through your own iCloud.")
+                Text("Sign in with Apple and your bots and chats are kept in your own iCloud.")
                     .font(.system(size: 13)).foregroundStyle(theme.secondary).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 380)

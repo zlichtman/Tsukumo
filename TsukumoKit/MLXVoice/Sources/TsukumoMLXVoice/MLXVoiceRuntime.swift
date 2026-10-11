@@ -10,7 +10,7 @@ import TsukumoVoice
 import UIKit
 #endif
 
-// Whisper and Kokoro on the GPU, ported from the old KemoSabe app (`legacy/ios/KemoSabe/NeuralSpeechEngines.swift`
+// Whisper and Kokoro on the GPU, ported from the old KemoSabe app (the old KemoSabe app's `NeuralSpeechEngines.swift`
 // and `OnDeviceWhisper.swift`'s `WhisperWorker`). Nothing here touches the network: the models come only
 // from TsukumoVoice's `VoiceModelStore`, which checked every file against its pinned SHA-256, and Kokoro's
 // G2P files are copied from that verified download into the folder mlx-audio reads, so its own Hugging Face

@@ -14,7 +14,7 @@ import CoreML
 // fallback, the bot last spoken to. `SystemOneCenter` keeps the settings, the keys (this device's
 // Keychain only), Laya's download, the journal, the marks, and the personal layer, and hands the chat
 // its `SystemOneRouter`. Each app draws its own page from it with `SystemOneCopy`, so the iPhone and the
-// Mac say the same things in the same order (AGENTS.md rule 9).
+// Mac say the same things in the same order (AGENTS.md rule 8).
 
 // MARK: Laya's download
 
@@ -493,7 +493,7 @@ public enum SystemOneSetupError: Error, LocalizedError, Sendable {
 
 // MARK: Words
 
-/// What both apps' System One tab says, in one place (AGENTS.md rule 9).
+/// What both apps' System One tab says, in one place (AGENTS.md rule 8).
 public enum SystemOneCopy {
     public static let untagged = "Untagged messages"
     public static let models = "Decision models"

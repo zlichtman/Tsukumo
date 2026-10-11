@@ -9,7 +9,7 @@ import TsukumoPolicy
 // later a Muse gadget) come to KemoSabe as callers: they ask a narrow, typed question, plain code decides under
 // the owner's rules and grants whether it may be answered, KemoSabe answers on this Mac, and only the answer
 // (or the one file, excerpt, or photo the owner allowed) leaves. Agents can also send results in, to an Inbox.
-// docs/ARCHITECTURE.md#the-kemosabe-gateway has the trust boundary and the threat model.
+// docs/ARCHITECTURE.md#tsukumogateway-the-kemosabe-gateway has the trust boundary and the threat model.
 
 /// The tools a caller may use. Typed, never "ask anything" except through KemoSabe's own Gate. Every one but
 /// `tsukumo.deliver` takes something out; `tsukumo.deliver` brings an agent's result in.

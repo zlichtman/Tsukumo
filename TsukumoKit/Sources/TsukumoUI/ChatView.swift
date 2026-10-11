@@ -2,7 +2,7 @@ import SwiftUI
 import TsukumoCore
 
 // The chat, laid out as the website demo (ported from the old KemoSabe app's `ChatComponents.swift` and
-// `ChatHandoff.swift`, in legacy/ios/KemoSabe): the owner's messages in soft bubbles on the right; each bot's replies under its avatar
+// `ChatHandoff.swift`, in the old KemoSabe app's KemoSabe): the owner's messages in soft bubbles on the right; each bot's replies under its avatar
 // and name; KemoSabe's card, "Claude asked KemoSabe", that reads this device and becomes KemoSabe's
 // answer; a working row while a bot thinks; KemoSabe above a short conversation; and the composer with
 // bot chips.
@@ -80,29 +80,6 @@ public struct ChatHeader<Leading: View, Trailing: View>: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .overlay(alignment: .bottom) { Rectangle().fill(theme.hairline).frame(height: 0.5) }
-    }
-}
-
-/// A round header button, like the website's settings button.
-public struct HeaderButton: View {
-    let systemImage: String
-    let label: String
-    let action: () -> Void
-    @Environment(\.colorScheme) private var scheme
-    public init(_ label: String, systemImage: String, action: @escaping () -> Void) {
-        self.label = label; self.systemImage = systemImage; self.action = action
-    }
-    public var body: some View {
-        let theme = TsukumoTheme(scheme)
-        Button(action: action) {
-            Image(systemName: systemImage).font(.system(size: 18, weight: .medium))
-                .foregroundStyle(theme.ink)
-                .frame(width: 42, height: 42)
-                .background(theme.fill, in: Circle())
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 }
 
@@ -203,6 +180,7 @@ public struct ChatTranscriptContent: View {
 struct ChatGreeting: View {
     var session: ChatSession
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.composerActions) private var actions
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// While the keyboard is up, KemoSabe steps aside so the greeting stays above the composer.
     @State private var typing = false
@@ -210,7 +188,10 @@ struct ChatGreeting: View {
         let theme = TsukumoTheme(scheme)
         VStack(alignment: .leading, spacing: 12) {
             if !typing {
-                KemoSabeFigure(bot: session.bot(BotSpec.kemoSabeID) ?? .kemoSabe()).frame(width: 200, height: 200).frame(maxWidth: .infinity).padding(.bottom, 26)
+                // A little smaller with the demo row, so the whole greeting fits above the composer.
+                let side: CGFloat = actions?.showDemo == nil ? 200 : 160
+                KemoSabeFigure(bot: session.bot(BotSpec.kemoSabeID) ?? .kemoSabe()).frame(width: side, height: side).frame(maxWidth: .infinity)
+                    .padding(.bottom, actions?.showDemo == nil ? 26 : 14)
                     .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
             }
             Text("What’s on your mind?").font(.system(size: TsukumoType.size(.largeTitle), weight: .semibold))
@@ -220,6 +201,11 @@ struct ChatGreeting: View {
                 suggestion("Plan my day", icon: "sun.max") { session.draft = "Help me plan my day. Ask what you need to know first." }
                 suggestion("Think something through", icon: "sparkle") { session.draft = "Help me think through a decision. Start with one useful question." }
                 suggestion("Write a message", icon: "square.and.pencil") { session.draft = "Help me write a short message. Ask who it’s for first." }
+                if let showDemo = actions?.showDemo {
+                    // The one place a new person sees what Tsukumo is for: another AI asking KemoSabe, on sample chats.
+                    suggestion("See how KemoSabe works", icon: "lock.shield.fill", highlighted: true, action: showDemo)
+                        .accessibilityIdentifier("seeDemo")
+                }
             }.padding(.top, 18)
         }
         .padding(.top, 12)
@@ -229,18 +215,18 @@ struct ChatGreeting: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
         #endif
     }
-    private func suggestion(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func suggestion(_ title: String, icon: String, highlighted: Bool = false, action: @escaping () -> Void) -> some View {
         let theme = TsukumoTheme(scheme)
         return Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon).foregroundStyle(theme.accent).frame(width: 22)
-                Text(title).tsukumoFont(.callout).foregroundStyle(theme.ink)
+                Text(title).tsukumoFont(.callout, weight: highlighted ? .semibold : .regular).foregroundStyle(theme.ink)
                 Spacer()
-                Image(systemName: "arrow.up.left").font(.caption).foregroundStyle(theme.secondary)
+                Image(systemName: highlighted ? "play.fill" : "arrow.up.left").font(.caption).foregroundStyle(highlighted ? theme.accent : theme.secondary)
             }
             .padding(.horizontal, 16).padding(.vertical, 14)
-            .background(theme.fill.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(theme.hairline))
+            .background(highlighted ? theme.selected : theme.fill.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(highlighted ? theme.accent.opacity(0.4) : theme.hairline))
         }
         .buttonStyle(.plain)
         .frame(maxWidth: 380)

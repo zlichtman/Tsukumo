@@ -1,7 +1,7 @@
 @preconcurrency import AVFoundation
 import Foundation
 
-// On-device Whisper's rules, ported from the old KemoSabe app (`legacy/ios/KemoSabe/OnDeviceWhisper.swift`):
+// On-device Whisper's rules, ported from the old KemoSabe app (the old KemoSabe app's `OnDeviceWhisper.swift`):
 // Apple's recognizer gives the live words and helps find the end of what you say; then Whisper reads the
 // same audio again, on this device, and its text replaces Apple's before anything is sent. Audio never
 // leaves the device on this path, and it is only ever in memory.

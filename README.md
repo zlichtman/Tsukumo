@@ -1,65 +1,55 @@
 # Tsukumo
 
-**All your AI bots in one place, with a guard on your device that keeps your personal life there.**
+**All your AI bots in one chat on your iPhone, with a guard on the phone that keeps your personal life there.**
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/mac-preview/side-dock-dark.png">
-    <img src="design/mac-preview/side-dock-light.png" width="560" alt="Tsukumo's side dock on a Mac: KemoSabe, then Claude, Grok, and Codex as their own marks, with Claude's chat open and KemoSabe asking before it shares anything">
+    <source media="(prefers-color-scheme: dark)" srcset="design/onboarding/iphone-4-chat-dark.png">
+    <img src="design/onboarding/iphone-4-chat-light.png" width="300" alt="Tsukumo on iPhone: KemoSabe waving on a new chat, with suggestions">
   </picture>
 </p>
 
-You probably talk to more than one AI: Claude for one thing, ChatGPT for another, Apple's on-device model for quick questions. Each lives in its own app, and when one of them needs something personal, like whether you're free tonight, the usual answer is to hand it your calendar or your messages.
+You probably talk to more than one AI: Claude for one thing, ChatGPT for another, Apple's on-device model for quick questions. Each lives in its own app, and when one of them needs something personal, like whether a friend said they're free tonight, the usual answer is to hand it your messages.
 
-Tsukumo puts your bots side by side and gives them a guard. When a bot needs something about you, it can't go looking. It asks **KemoSabe**, the bot that lives on your device. KemoSabe reads there with Apple's on-device model and hands over only the answer, and only with your say-so.
+Tsukumo puts your bots side by side and gives them a guard. When a bot needs something about you, it can't go looking. It asks **KemoSabe**, the bot that lives on your iPhone. KemoSabe reads there with Apple's on-device model and hands over only the answer, and only with your say-so.
 
 ## What it does
 
 ### Your bots, together
 
-- **Bring them or make them.** Add your ChatGPT dot, Tsukumo's Claude bot, or an agent like Grok, OpenClaw, or Meta's Muse. Or make your own on Claude or OpenAI with your API key, or on Claude Code, Codex, Cursor Agent, or Gemini CLI with your own sign-in. Any bot can wear one of your Codex pets.
-- **One chat or many.** Each bot has its own conversation, and Together puts them all in one thread. Tag a bot with `@name`, or let Tsukumo pick who answers, starting on your device.
-- **Talk out loud.** Click a bot in the dock (on iPhone, tap the microphone) and say what you need. It answers in its own voice, and speech stays on your device.
-- **Work in the background.** Give Tsukumo's Claude bot a goal, now or on a schedule, and it works while you do something else. Its tile shows when it needs you or is done.
-- **Coding bots that ask first.** A coding bot works in a folder you pick, read only unless you allow more, and can open what it edits in Xcode, Cursor, VS Code, or Zed.
+- **Bring your own models.** Add a Claude or OpenAI key and that service's bot joins KemoSabe in the chat. Or make your own bot: give it a name, a job, and what it should know, and pick what it runs on.
+- **One chat for all of them.** Tag a bot with a tap or `@name`, or keep talking to the last one, and let Tsukumo pick who answers when you don't. Your chats come up from the bottom of the screen, one thumb away.
+- **Pick the power.** Tap the model under the message box to choose a bot's model, how hard it thinks, and, on Claude Opus, Fast for quicker answers.
+- **Characters.** Any bot can wear one of Tsukumo's own characters: Lobster, Brain, Octopus, Fox, Cat, Penguin, or Frog.
+- **Talk out loud.** Tap the microphone or hold a bot's chip and say what you need. It answers in its own voice, and speech stays on your iPhone.
 
-### KemoSabe keeps your life on your device
+### KemoSabe keeps your life on your iPhone
 
-- **Bots ask, KemoSabe answers.** No bot reads your calendar, messages, or files itself. The first time one asks, you choose Allow always, Allow once, or Don't allow, and a card in the chat shows what was shared and what stayed put.
-- **You pick the sources.** Calendar, Reminders, Contacts, Messages, Photos, the folders you choose, Location and Music on iPhone, and any service with an MCP server. Each is off until you turn it on, and anything you mark Device only is never read for a bot.
-- **Outside services ask too.** On a Mac, turn on the gateway and services like Claude Code, Codex, Grok, ChatGPT, and Muse can ask KemoSabe for your free/busy times, a contact, or a file you allow. Each signs in once, and Revoke is one click away.
+- **Bots ask, KemoSabe answers.** No bot reads your messages or files itself. The first time one asks, you choose Allow always, Allow once, or Don't allow, and a card in the chat shows what was shared and what stayed put.
+- **You pick the sources.** Reminders, Contacts, Messages you give it, Photos details, the files and folders you choose, Location, Music, and any service with an MCP server. Each is off until you turn it on, and anything you mark Device only is never read for a bot.
 - **One activity feed.** Everything KemoSabe answered or refused, and what your bots did.
-- **Your keys stay yours.** API keys are kept in that device's Keychain.
-
-### Made to fit
-
-- **A dock that's yours.** On a Mac, your bots live in a side dock beside macOS's own. Pick its style, color, size, and spot with a live preview, and find Settings one click away at its foot.
-- **KemoSabe your way.** A friendly cloud or a two-tone figure with a wave, in twenty-one palettes.
-- **Updates itself.** New versions install only after they're confirmed as signed by the developer and notarized by Apple.
+- **Your keys stay yours.** API keys are kept in your iPhone's Keychain, never synced or backed up.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/onboarding/iphone-4-chat-dark.png">
-    <img src="design/onboarding/iphone-4-chat-light.png" width="260" alt="Tsukumo on iPhone: KemoSabe waving on a new chat, with suggestions">
+    <source media="(prefers-color-scheme: dark)" srcset="design/bot-customization/iphone-model-sheet-dark.png">
+    <img src="design/bot-customization/iphone-model-sheet-light.png" width="260" alt="Claude's model sheet: Opus 5.5, its power on Medium, and Standard or Fast speed">
   </picture>
   &nbsp;&nbsp;
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/mac-settings/mac-kemosabe-states-dark.png">
-    <img src="design/mac-settings/mac-kemosabe-states-light.png" width="520" alt="KemoSabe idle, thinking, answering, needing you, listening, and asleep">
+    <source media="(prefers-color-scheme: dark)" srcset="design/onboarding/iphone-kemosabe-sources-dark.png">
+    <img src="design/onboarding/iphone-kemosabe-sources-light.png" width="260" alt="What KemoSabe may read, each source off until you turn it on">
   </picture>
 </p>
 
 ## Get it
 
-| | What you get | Needs | Available |
-|---|---|---|---|
-| **Mac** | Tsukumo's Dock: your bots in a dock at the edge of the screen, from the menu bar | macOS 26 on a Mac with Apple Intelligence | Not yet |
-| **iPhone** | The Tsukumo app: the same bots in one chat | iOS 26, and Apple Intelligence for KemoSabe | Coming soon |
+Tsukumo for iPhone is coming soon. It needs iOS 26, and an iPhone with Apple Intelligence for KemoSabe.
 
 ## Getting started
 
-Open Tsukumo and a short first run walks you through signing in (or continuing without an account) and connecting what you use. Then the dock appears with KemoSabe in it. Click **+** to add a bot, click a bot to talk to it, and click the gear at the dock's foot for Settings.
+Open Tsukumo and a short first run walks you through connecting your AIs (your Claude or OpenAI key) and then your life: what KemoSabe may read, and any connectors. Then you're in the chat with KemoSabe. Tap **See how KemoSabe works** to watch another AI ask KemoSabe something, on sample chats, and decide what it may share. Your bots, keys, and everything else are in Settings, under your picture and name.
 
 ## Under the hood
 
-Tsukumo is written in Swift on a shared package, TsukumoKit. [DEVELOPMENT.md](DEVELOPMENT.md) covers building and running it, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how it fits together. The two apps that came before it, the Tsukumo coding harness for Mac and the KemoSabe iPhone app, are kept in [legacy/](legacy/README.md) for reference.
+Tsukumo is written in Swift on a shared package, TsukumoKit. [DEVELOPMENT.md](DEVELOPMENT.md) covers building and running it, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how it fits together.

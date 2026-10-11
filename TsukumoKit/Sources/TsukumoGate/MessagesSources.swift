@@ -3,8 +3,8 @@ import SQLite3
 import TsukumoCore
 import TsukumoPolicy
 
-// Messages, ported from the old apps (legacy/ios/KemoSabe/PersonalSources.swift and
-// legacy/macos/KemoSabeMac/MacMessagesSource.swift):
+// Messages, ported from the old apps (the old KemoSabe app's PersonalSources.swift and
+// the old Mac app's MacMessagesSource.swift):
 //
 // - On a Mac, with Messages in iCloud, ~/Library/Messages/chat.db holds the owner's history. macOS guards
 //   that folder: reading it needs Full Disk Access, which only the owner grants in System Settings. KemoSabe

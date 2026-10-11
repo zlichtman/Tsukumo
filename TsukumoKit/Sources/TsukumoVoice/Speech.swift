@@ -2,7 +2,7 @@
 import Foundation
 import TsukumoCore
 
-// Speech out, ported from the old KemoSabe app (`legacy/ios/KemoSabe/SpeechEngine.swift`,
+// Speech out, ported from the old KemoSabe app (the old KemoSabe app's `SpeechEngine.swift`,
 // `NeuralSpeechEngines.swift`, `VoicePolicy.swift`'s `VoiceCatalog`, and `CompanionPolicy.swift`'s
 // `SpeechText`): every reply voice sits behind `SpeechEngine`, Kokoro on the device once it's downloaded,
 // and Apple's best installed voice as the fallback for everything. New: each bot has its own voice.

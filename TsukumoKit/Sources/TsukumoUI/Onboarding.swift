@@ -34,6 +34,8 @@ public struct OnboardingSource: Identifiable, Hashable, Sendable {
     var deviceName: String { get }
     /// Sign in with a stand-in (UI tests and screenshots).
     var fixtureSignIn: Bool { get }
+    /// Whether this build can sign in with Apple at all; without it, the first run has no sign-in step.
+    var canSignIn: Bool { get }
     /// Whether Apple's on-device model can run here, and why not in plain words.
     var appleIntelligence: (ready: Bool, text: String) { get }
     /// Whether each provider is connected already.
@@ -45,19 +47,32 @@ public struct OnboardingSource: Identifiable, Hashable, Sendable {
     func setSource(_ id: String, level: PrivacyLevel) async
     /// KemoSabe as the owner has it (its palette).
     var kemoSabe: BotSpec { get }
+    /// The form that adds a connector (any MCP server), for the first run's Connect your life; nil offers none.
+    var connectorForm: AnyView? { get }
+    /// The connectors added so far, by name.
+    var connectorNames: [String] { get }
     /// The first run is done: show the chat.
     func finishOnboarding()
 }
 
-/// The first run.
+public extension OnboardingHost {
+    var connectorForm: AnyView? { nil }
+    var connectorNames: [String] { [] }
+}
+
+/// The first run: welcome, sign in (where this build can), connect your AIs, then connect your life (what KemoSabe
+/// may read, and connectors).
 public struct OnboardingFlow<Host: OnboardingHost>: View {
-    public enum Step: Int, CaseIterable, Sendable { case welcome, signIn, connect }
+    public enum Step: Int, CaseIterable, Sendable { case welcome, signIn, connect, sources }
     let host: Host
     @State private var step: Step
     @State private var problem: String?
     @State private var keys: [OnboardingProvider: String] = [:]
     @State private var connecting: OnboardingProvider?
     @State private var connectProblem: [OnboardingProvider: String] = [:]
+    @State private var addingConnector = false
+    /// The key field being typed in; the buttons at the bottom step aside meanwhile, so nothing covers it.
+    @FocusState private var typingKey: OnboardingProvider?
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -68,6 +83,8 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
     }
 
     private var theme: TsukumoTheme { TsukumoTheme(scheme) }
+    /// The steps this build shows: no sign-in step where Sign in with Apple can't work.
+    private var steps: [Step] { host.canSignIn ? Step.allCases : [.welcome, .connect, .sources] }
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -78,6 +95,7 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
                     case .welcome: welcome
                     case .signIn: signIn
                     case .connect: connect
+                    case .sources: sources
                     }
                 }
                 .frame(maxWidth: 520)
@@ -86,7 +104,8 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
-            footer
+            .scrollDismissesKeyboard(.interactively)
+            if typingKey == nil { footer }
         }
         .background(theme.background.ignoresSafeArea())
         .foregroundStyle(theme.ink)
@@ -97,20 +116,20 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
 
     private var progress: some View {
         HStack(spacing: 6) {
-            ForEach(Step.allCases, id: \.self) { each in
+            ForEach(steps, id: \.self) { each in
                 Capsule().fill(each.rawValue <= step.rawValue ? theme.accent : theme.ink.opacity(0.15))
                     .frame(width: each == step ? 22 : 8, height: 8)
             }
         }
         .accessibilityElement()
-        .accessibilityLabel("Step \(step.rawValue + 1) of \(Step.allCases.count)")
+        .accessibilityLabel("Step \((steps.firstIndex(of: step) ?? 0) + 1) of \(steps.count)")
     }
 
     @ViewBuilder private var footer: some View {
         VStack(spacing: 10) {
             switch step {
             case .welcome:
-                primary("Get started", id: "onboardingStart") { go(.signIn) }
+                primary("Get started", id: "onboardingStart") { go(host.canSignIn ? .signIn : .connect) }
             case .signIn:
                 AppleSignInButton(accounts: host.accounts, fixture: host.fixtureSignIn) { message in
                     problem = message
@@ -124,10 +143,9 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
                     .padding(.vertical, 6)
                     .accessibilityIdentifier("continueWithoutAccount")
             case .connect:
+                primary("Continue", id: "onboardingContinue") { go(.sources) }
+            case .sources:
                 primary("Start chatting", id: "onboardingFinish") { finish() }
-                Button("Skip for now") { finish() }
-                    .buttonStyle(.plain).foregroundStyle(theme.secondary).padding(.vertical, 4)
-                    .accessibilityIdentifier("connectSkip")
             }
         }
         .padding(.horizontal, 24)
@@ -207,7 +225,7 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
 
     private var connect: some View {
         VStack(alignment: .leading, spacing: 20) {
-            title("Connect what you use", "All optional. You can change any of it later in Settings.").frame(maxWidth: .infinity)
+            title("Connect your AIs", "Add a key and that service’s bot joins KemoSabe in your chat. All optional: keys can wait for Settings.").frame(maxWidth: .infinity)
             card("Apple Intelligence") {
                 let status = host.appleIntelligence
                 HStack(alignment: .top, spacing: 12) {
@@ -226,6 +244,17 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
                 Text("Each one you connect gets its own bot beside KemoSabe. Keys stay in this \(host.deviceName)’s Keychain. They never sync.")
                     .font(.footnote).foregroundStyle(theme.secondary).fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("onboardingConnect")
+    }
+
+    // MARK: Connect your life
+
+    private var sources: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            title("Connect your life", "What KemoSabe may read to answer your bots. Each is off until you turn it on, and all of it stays on this \(host.deviceName).")
+                .frame(maxWidth: .infinity)
             if !host.onboardingSources.isEmpty {
                 card("What KemoSabe may read") {
                     ForEach(host.onboardingSources) { source in sourceRow(source) }
@@ -233,9 +262,23 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
                         .font(.footnote).foregroundStyle(theme.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if let form = host.connectorForm {
+                card("Connectors") {
+                    ForEach(host.connectorNames, id: \.self) { name in
+                        Label(name, systemImage: "link").font(.body)
+                    }
+                    Button { addingConnector = true } label: {
+                        Label("Add a connector", systemImage: "plus").font(.body.weight(.medium))
+                    }
+                    .accessibilityIdentifier("onboardingAddConnector")
+                    Text("Any service with an MCP server, like Notion, Gmail, or GitHub. KemoSabe asks it on this \(host.deviceName), the same way.")
+                        .font(.footnote).foregroundStyle(theme.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                .sheet(isPresented: $addingConnector) { form.tsukumoSheet() }
+            }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("onboardingConnect")
+        .accessibilityIdentifier("onboardingSources")
     }
 
     private func card(_ heading: String, @ViewBuilder _ content: () -> some View) -> some View {
@@ -264,11 +307,17 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
             if !connected {
                 HStack(spacing: 8) {
                     SecureField(provider.placeholder, text: Binding(get: { keys[provider] ?? "" }, set: { keys[provider] = $0 }))
-                        .textFieldStyle(.roundedBorder)
+                        .textFieldStyle(.plain)
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(theme.surface, in: RoundedRectangle(cornerRadius: TsukumoMetrics.rowCorner, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: TsukumoMetrics.rowCorner, style: .continuous).stroke(theme.hairline))
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
+                        .focused($typingKey, equals: provider)
+                        .submitLabel(.done)
+                        .onSubmit { Task { await add(provider) } }
                         .accessibilityIdentifier("connectKey-" + provider.rawValue)
                     Button(connecting == provider ? "Checking…" : "Add") { Task { await add(provider) } }
                         .disabled(connecting != nil || (keys[provider] ?? "").trimmingCharacters(in: .whitespaces).isEmpty)
@@ -282,6 +331,8 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
     }
 
     private func add(_ provider: OnboardingProvider) async {
+        guard !(keys[provider] ?? "").trimmingCharacters(in: .whitespaces).isEmpty else { typingKey = nil; return }
+        typingKey = nil
         connecting = provider
         defer { connecting = nil }
         do {
@@ -300,10 +351,9 @@ public struct OnboardingFlow<Host: OnboardingHost>: View {
             }
             .accessibilityIdentifier("onboardingSource-" + source.id)
             if source.on {
-                Picker("How private", selection: Binding(get: { source.level }, set: { level in Task { await host.setSource(source.id, level: level) } })) {
-                    ForEach([PrivacyLevel.personal, .sensitive, .deviceOnly]) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
+                TsukumoSegmented([PrivacyLevel.personal, .sensitive, .deviceOnly].map { ($0, $0.title) },
+                                 selection: Binding(get: { source.level }, set: { level in Task { await host.setSource(source.id, level: level) } }))
+                    .accessibilityLabel("How private")
                 Text(source.level.detail).font(.caption).foregroundStyle(theme.secondary)
             }
         }

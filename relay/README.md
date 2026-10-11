@@ -1,10 +1,10 @@
 # The Tsukumo relay
 
-A public address for the KemoSabe gateway on the owner's Mac, so cloud agents (Claude's custom connectors, ChatGPT's developer-mode connectors, Grok, OpenClaw) can reach it. The Mac keeps one outbound WebSocket to the relay; each device gets a stable address (`https://<id>.<domain>`, or `https://<host>/d/<id>` on workers.dev); the relay forwards each HTTP request over that socket and returns the Mac's answer, byte for byte. It stores each device's public key and lease, a count of devices, and for one day salted hashes of the addresses that registered. Sign-in, consent, grants, budgets, and policy all stay on the Mac.
+A public address for the KemoSabe gateway on the owner's device, so cloud agents (Claude's custom connectors, ChatGPT's developer-mode connectors, Grok, OpenClaw) can reach it. The Mac keeps one outbound WebSocket to the relay; each device gets a stable address (`https://<id>.<domain>`, or `https://<host>/d/<id>` on workers.dev); the relay forwards each HTTP request over that socket and returns the Mac's answer, byte for byte. It stores each device's public key and lease, a count of devices, and for one day salted hashes of the addresses that registered. Sign-in, consent, grants, budgets, and policy all stay on the Mac.
 
-It's a Cloudflare Worker with one SQLite-backed Durable Object per device (`src/device.ts`), which holds the device's socket through the WebSocket hibernation API, and one `Registry` object (`src/registry.ts`). How it fits, its trust boundary, device authentication, and **the envelope the Mac client implements** are in [docs/ARCHITECTURE.md, The Tsukumo relay](../docs/ARCHITECTURE.md#the-tsukumo-relay).
+It's a Cloudflare Worker with one SQLite-backed Durable Object per device (`src/device.ts`), which holds the device's socket through the WebSocket hibernation API, and one `Registry` object (`src/registry.ts`). How it fits, its trust boundary, device authentication, and **the envelope the device's client implements** are in [docs/ARCHITECTURE.md, The Tsukumo relay](../docs/ARCHITECTURE.md#the-tsukumo-relay).
 
-**Status:** built; not deployed (that's the owner's step, below), and the Mac's client is the KemoSabe gateway's public address (Settings, Gateway, Public address; `RelayConnection` in TsukumoKit).
+**Status:** built; not deployed (that's the owner's step, below). It was built for Tsukumo's Mac app, whose gateway was its client (`RelayConnection` in TsukumoKit); that app isn't in this repo any more, and the relay is kept for bringing the gateway to the iPhone, which doesn't use it yet. "The Mac" below means the device holding the socket; `scripts/fake-mac.mjs` stands in for it.
 
 ## Files
 

@@ -13,7 +13,8 @@ import TsukumoEngines
 
 public extension BotTurn {
     /// The part of the thread this bot may see: the owner's messages that tagged it, and its own
-    /// replies. Never another bot's words, and never what KemoSabe told another bot.
+    /// replies. Never another bot's words, and never what KemoSabe told another bot. A message the bot never
+    /// answered (stopped, or it failed) is left out: the owner moved on, and the bot shouldn't answer it now.
     var visibleHistory: [EngineMessage] {
         var turns: [EngineMessage] = []
         for message in thread.messages where message.id != self.message.id {
@@ -26,11 +27,14 @@ public extension BotTurn {
             default: continue
             }
             if let last = turns.last, last.role == role {
-                turns[turns.count - 1] = EngineMessage(role: role, text: last.text + "\n\n" + text)
+                // Two of the owner's in a row: the first went unanswered. Two replies in a row: one answer.
+                turns[turns.count - 1] = EngineMessage(role: role, text: role == .user ? text : last.text + "\n\n" + text)
             } else {
                 turns.append(EngineMessage(role: role, text: text))
             }
         }
+        // The last of the owner's before this message went unanswered too.
+        if turns.last?.role == .user { turns.removeLast() }
         while turns.first?.role == .assistant { turns.removeFirst() }
         return Array(turns.suffix(40))
     }

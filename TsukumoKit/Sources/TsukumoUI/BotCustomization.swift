@@ -29,6 +29,7 @@ public struct KemoSabeEditor: View {
     public var body: some View {
         NavigationStack {
             Form {
+                Group {
                 Section {
                     KemoSabeHeader(bot: bot, device: device)
                 }
@@ -56,7 +57,10 @@ public struct KemoSabeEditor: View {
                 if let note {
                     Section { Text(note).font(.footnote).foregroundStyle(.secondary) }
                 }
+                }
+                .tsukumoRows()
             }
+            .tsukumoScreen(sheet: true)
             .navigationTitle(bot.name)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

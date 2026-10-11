@@ -116,6 +116,14 @@ public enum EffortCatalog {
         case .openAICompatible, .apple: return nil
         }
     }
+    /// Whether `model` offers fast mode over `wire` at `host`: Claude Opus 5.5, 5, and 4.8, on Anthropic's own API only
+    /// (`speed: "fast"` with the `fast-mode-2026-02-01` beta; not on other platforms or OpenAI-compatible servers).
+    public static func offersFastMode(wire: Wire, model: String, host: String?) -> Bool {
+        guard wire == .anthropic, host?.lowercased() == "api.anthropic.com" else { return false }
+        let id = model.lowercased()
+        return ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"].contains { id == $0 || id.hasPrefix($0 + "-") }
+    }
+
     /// `effort` when the model accepts it; otherwise nil (the model's default).
     public static func accepted(_ effort: Effort?, wire: Wire, model: String) -> Effort? {
         guard let effort, efforts(wire: wire, model: model).contains(effort) else { return nil }

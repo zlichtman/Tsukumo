@@ -77,6 +77,10 @@ import TsukumoVoice
     @ObservationIgnored public var onApprovalNeeded: ((PendingApproval) -> Void)?
     /// A bot's turn ended, however it ended.
     @ObservationIgnored public var onTurnEnded: ((UUID) -> Void)?
+    /// A bot's reply landed in this chat: the bot, the reply, and the chat (the app's notification while it's away).
+    @ObservationIgnored public var onReplied: ((BotSpec, String, UUID) -> Void)?
+    /// A consent card started waiting on the owner: who asks, the question, and the chat.
+    @ObservationIgnored public var onConsentNeeded: ((String, String, UUID) -> Void)?
     /// Share cards waiting on the owner: one Sensitive item, and exactly what would be sent.
     public private(set) var sharePrompts: [GateExchangeID: SharePrompt] = [:]
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
@@ -340,6 +344,7 @@ import TsukumoVoice
         if !text.isEmpty {
             thread.append(Message(author: .bot(botID), parts: [.text(text)]))
             events.append(.replied(botID))
+            if let replied = bot(botID) { onReplied?(replied, text, thread.id) }
             let line = text.split(separator: "\n").first.map(String.init) ?? text
             onActivity?(ActivityItem(kind: .botWork, title: "\(name) replied", detail: line, botID: botID, threadID: thread.id))
         }
@@ -595,6 +600,11 @@ import TsukumoVoice
         guard liveExchanges.contains(exchange) else { gate.withdraw(exchange); return .deny }
         setQuestionState(exchange, .needsConsent)
         events.append(.needsConsent(exchange))
+        if let card = thread.messages.lazy.flatMap(\.parts).compactMap({ part -> GateQuestionCard? in
+            if case .gateQuestion(let card) = part, card.exchange == exchange { return card } else { return nil }
+        }).first {
+            onConsentNeeded?(card.askerName, card.question, thread.id)
+        }
         let choice = await withCheckedContinuation { continuation in consents[exchange, default: []].append(continuation) }
         if liveExchanges.contains(exchange) { setQuestionState(exchange, .reading) }
         return choice

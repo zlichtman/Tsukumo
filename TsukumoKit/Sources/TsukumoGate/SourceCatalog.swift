@@ -3,7 +3,7 @@ import Observation
 import TsukumoCore
 import TsukumoPolicy
 
-// What KemoSabe may read (October 3): one catalog, the same on iPhone and Mac (AGENTS.md rule 9), grouped by
+// What KemoSabe may read (October 3): one catalog, the same on iPhone and Mac (AGENTS.md rule 8), grouped by
 // kind. Every source reads only on this device, only when a bot's question reaches the Gate, and only after
 // the owner turns it on (which asks the system for permission where the system has one). Each carries the
 // level the owner set, and the Gate's policy decides what may be read for a bot: Sensitive asks on a card,
@@ -141,8 +141,9 @@ public enum SourceKind: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// The built-in sources (one each), in the catalog's order.
-    public static let builtIn: [SourceKind] = [.calendar, .reminders, .contacts, .messages, .mail, .photos, .music, .location]
+    /// The built-in sources (one each), in the catalog's order. Calendar isn't offered (the owner, October 11, 2026); its
+    /// case stays so settings saved by earlier builds still decode.
+    public static let builtIn: [SourceKind] = [.reminders, .contacts, .messages, .mail, .photos, .music, .location]
 }
 
 public enum SourceAvailability: Hashable, Sendable {

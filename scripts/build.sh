@@ -3,7 +3,6 @@
 # "we're going to just ship stuff and I will find the errors"); write the safest code you can, and test one thing by
 # hand when that's what would catch an error.
 #
-#   apps/macos, TsukumoKit   a Debug build of the Mac app (it builds TsukumoKit's code the Mac uses)
 #   apps/ios, TsukumoKit     a simulator build of the iPhone app
 #   relay                    the typecheck
 #   scripts                  `zsh -n` on each changed script
@@ -43,15 +42,6 @@ XC=(-skipPackagePluginValidation -skipMacroValidation
     -clonedSourcePackagesDirPath "${TSUKUMO_SPM_CACHE:-$HOME/Library/Caches/tsukumo-release/SourcePackages}")
 
 for s in ${(M)CHANGED:#scripts/*.sh}; do [[ -f $s ]] && zsh -n "$s"; done
-
-if touched apps/macos TsukumoKit; then
-  echo "== The Mac app"
-  (cd apps/macos && run mac-xcodegen xcodegen generate)
-  wait_xcode
-  run mac-build xcodebuild build -project apps/macos/Tsukumo.xcodeproj -scheme Tsukumo -configuration Debug \
-    -destination 'platform=macOS' -derivedDataPath "$BUILDS/mac-dd" "${XC[@]}"
-  echo "  built: $BUILDS/mac-dd/Build/Products/Debug/Tsukumo.app"
-fi
 
 if touched apps/ios TsukumoKit; then
   echo "== The iPhone app"

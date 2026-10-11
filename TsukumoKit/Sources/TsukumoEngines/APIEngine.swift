@@ -146,6 +146,8 @@ public struct APIEngine: Engine {
         let model = turn.bot.model ?? connection.model
         // Only an effort this model documents, in its own provider's field.
         let effort = EffortCatalog.accepted(turn.bot.effort, wire: connection.effortWire, model: model)
+        // Fast mode only where it's offered; if its own rate limit is hit, the turn goes on at standard speed.
+        var fast = turn.bot.fast && EffortCatalog.offersFastMode(wire: connection.effortWire, model: model, host: connection.endpoint.host)
         let tools = turn.runTool == nil ? [] : turn.tools
         var exchanges: [(text: String, calls: [ToolCall], results: [String])] = []
         var allCalls: [ToolCall] = []
@@ -162,7 +164,8 @@ public struct APIEngine: Engine {
             case .anthropic:
                 request.setValue(key, forHTTPHeaderField: "x-api-key")
                 request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-                body = WireBodies.anthropic(turn: turn, model: model, effort: effort, tools: tools, allowCalls: allowCalls,
+                if fast { request.setValue("fast-mode-2026-02-01", forHTTPHeaderField: "anthropic-beta") }
+                body = WireBodies.anthropic(turn: turn, model: model, effort: effort, fast: fast, tools: tools, allowCalls: allowCalls,
                                             exchanges: exchanges, stream: connection.streaming)
             case .openAICompatible:
                 if !key.isEmpty { request.setValue("Bearer " + key, forHTTPHeaderField: "Authorization") }
@@ -170,7 +173,17 @@ public struct APIEngine: Engine {
                                          exchanges: exchanges, stream: connection.streaming)
             }
             request.httpBody = try TsukumoJSON.encoder.encode(body)
-            let (text, calls) = try await send(request, allowCalls: allowCalls, emit: emit)
+            let text: String, calls: [ToolCall]
+            do {
+                (text, calls) = try await send(request, allowCalls: allowCalls, emit: emit)
+            } catch EngineError.limited where fast {
+                // Fast mode has its own rate limit: the same request again at standard speed.
+                fast = false
+                request.setValue(nil, forHTTPHeaderField: "anthropic-beta")
+                request.httpBody = try TsukumoJSON.encoder.encode(WireBodies.anthropic(turn: turn, model: model, effort: effort, fast: false, tools: tools,
+                                                                                         allowCalls: allowCalls, exchanges: exchanges, stream: connection.streaming))
+                (text, calls) = try await send(request, allowCalls: allowCalls, emit: emit)
+            }
             guard !calls.isEmpty else { return EngineReply(text: text, toolCalls: allCalls) }
             guard allowCalls, calls.count <= Self.maxCallsPerRound, let runTool = turn.runTool else { throw EngineError.incomplete }
             var results: [String] = []
@@ -240,7 +253,7 @@ enum WireBodies {
 
     /// Claude's Messages API: the system prompt, alternating turns starting with the owner, and
     /// tool use and results replayed as content blocks.
-    static func anthropic(turn: EngineTurn, model: String, effort: Effort?, tools: [ToolDefinition], allowCalls: Bool,
+    static func anthropic(turn: EngineTurn, model: String, effort: Effort?, fast: Bool = false, tools: [ToolDefinition], allowCalls: Bool,
                           exchanges: [(text: String, calls: [ToolCall], results: [String])], stream: Bool) -> JSONValue {
         var messages: [(role: String, blocks: [JSONValue])] = []
         for message in turn.history + [EngineMessage(role: .user, text: turn.message)] {
@@ -266,6 +279,7 @@ enum WireBodies {
             if !allowCalls { body["tool_choice"] = .object(["type": .string("none")]) }
         }
         if let effort { body["output_config"] = .object(["effort": .string(effort.rawValue)]) }
+        if fast { body["speed"] = .string("fast") }
         return .object(body)
     }
 

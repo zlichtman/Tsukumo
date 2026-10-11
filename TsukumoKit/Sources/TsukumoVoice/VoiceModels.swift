@@ -2,7 +2,7 @@ import CryptoKit
 import Foundation
 import Observation
 
-// The better voice models, ported from the old KemoSabe app (`legacy/ios/KemoSabe/VoiceModelPacks.swift`,
+// The better voice models, ported from the old KemoSabe app (the old KemoSabe app's `VoiceModelPacks.swift`,
 // `VoiceModelDownloads.swift`, and the Whisper pin in `OnDeviceWhisper.swift`): each pinned to exact
 // files (the repository commit, every file's size, and its SHA-256), downloaded only after the owner's one
 // consent, checked file by file, and installed only as a complete, verified set. They're device data, not

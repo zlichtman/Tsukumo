@@ -7,7 +7,7 @@ import MapKit
 import MediaPlayer
 #endif
 
-// Location and Music, on iPhone (ported from legacy/ios/KemoSabe/PersonalSourcesPhone.swift and new):
+// Location and Music, on iPhone (ported from the old KemoSabe app's PersonalSourcesPhone.swift and new):
 //
 // - Location: "near me". Only for a question about where the owner is or what's close, Apple's When In Use
 //   location, rounded to about a kilometer, read once per question and kept ten minutes in memory only.

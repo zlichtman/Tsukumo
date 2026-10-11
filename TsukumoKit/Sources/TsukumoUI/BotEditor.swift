@@ -21,16 +21,38 @@ public struct EngineChoice: Identifiable, Hashable, Sendable {
     public var modelNames: [String: String]
     /// The efforts each model takes, by ID, when the engine said (a coding agent's own list); otherwise `wire` decides.
     public var modelEfforts: [String: [Effort]]
+    /// The API's host, for what only one host offers (fast mode is Anthropic's own API only).
+    public var host: String?
     public var id: String { engine.key }
 
     public init(engine: EngineID, info: EngineInfo, models: [String] = [], wire: EffortCatalog.Wire? = nil, unavailable: String? = nil,
-                modelNames: [String: String] = [:], modelEfforts: [String: [Effort]] = [:]) {
+                modelNames: [String: String] = [:], modelEfforts: [String: [Effort]] = [:], host: String? = nil) {
         self.engine = engine; self.info = info; self.models = models; self.wire = wire; self.unavailable = unavailable
-        self.modelNames = modelNames; self.modelEfforts = modelEfforts
+        self.modelNames = modelNames; self.modelEfforts = modelEfforts; self.host = host
     }
 
-    /// What a model is called here.
-    public func name(of model: String) -> String { modelNames[model] ?? model }
+    /// What a model is called here: its listed name, or a readable one from its ID ("claude-opus-5-5" is "Opus 5.5").
+    public func name(of model: String) -> String { modelNames[model] ?? Self.readable(model) }
+
+    /// "claude-opus-5-5" → "Opus 5.5", "claude-sonnet-4-6-20250929" → "Sonnet 4.6", "gpt-5.2" → "GPT-5.2",
+    /// "gpt-5.2-codex" → "GPT-5.2 Codex"; anything else as it is.
+    public static func readable(_ model: String) -> String {
+        let parts = model.split(separator: "-").map(String.init)
+        if parts.count >= 3, parts[0].lowercased() == "claude", Int(parts[2]) != nil {
+            // A date suffix ("20250929") is not a version.
+            let version = parts.dropFirst(2).filter { Int($0).map { $0 < 100 } ?? false }.joined(separator: ".")
+            return parts[1].prefix(1).uppercased() + parts[1].dropFirst() + " " + version
+        }
+        if parts.first?.lowercased().hasPrefix("gpt") == true, let head = parts.first, parts.count >= 1 {
+            var words = [head.uppercased()]
+            for part in parts.dropFirst() {
+                if Int(part.replacingOccurrences(of: ".", with: "")) != nil, words.count == 1 { words[0] += "-" + part }
+                else { words.append(part.prefix(1).uppercased() + part.dropFirst()) }
+            }
+            return words.joined(separator: " ")
+        }
+        return model
+    }
     /// The efforts a model takes (nil: the engine's first model).
     public func efforts(for model: String?) -> [Effort] {
         let model = model ?? models.first ?? ""
@@ -99,6 +121,7 @@ public struct BotEditor: View {
     public var body: some View {
         NavigationStack {
             Form {
+                Group {
                 Section {
                     VStack(spacing: 8) {
                         Button { characterOpen.toggle() } label: { BotCharacterView(bot: bot, size: 72, animated: false) }
@@ -158,13 +181,16 @@ public struct BotEditor: View {
                     Section {
                         Button("Remove \(bot.name)", role: .destructive) { confirmRemove = true }.accessibilityIdentifier("removeBot")
                     } footer: {
-                        Text("It leaves your Mac’s dock too. Its chats are kept.")
+                        Text("Its chats are kept.")
                     }
                     .confirmationDialog("Remove \(bot.name)?", isPresented: $confirmRemove, titleVisibility: .visible) {
                         Button("Remove", role: .destructive, action: onRemove)
                     }
                 }
+                }
+                .tsukumoRows()
             }
+            .tsukumoScreen(sheet: true)
             .navigationTitle(isNew ? "New Bot" : bot.name)
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -207,7 +233,9 @@ public struct BotEditor: View {
             }
             .accessibilityIdentifier("botEffort")
         }
-        Text(bot.engine.runsOnlyOnMac ? "Runs on your own sign-in for that agent, on your Mac." : "Runs on the model you connected, with your key.")
+        Text(bot.engine.runsOnlyOnMac ? "Runs on your own sign-in for that agent, on a Mac."
+             : bot.engine == .appleOnDevice ? "Runs on Apple’s model on this iPhone. Nothing it’s told leaves it."
+             : "Runs on the model you connected, with your key.")
             .font(.footnote).foregroundStyle(.secondary)
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 @preconcurrency import Speech
 
 // Speech in: the microphone and Apple's on-device recognizer, which gives the live words while you talk.
-// Ported from the old Mac app's dictation (`legacy/macos/KemoSabeMac/MacVoiceInput.swift`) and the old app's
+// Ported from the old Mac app's dictation (the old Mac app's `MacVoiceInput.swift`) and the old app's
 // `UtteranceRecorder`; new is `EndOfSpeech`, which ends a tap-to-talk turn when you stop talking.
 
 /// What the microphone reports while it listens.

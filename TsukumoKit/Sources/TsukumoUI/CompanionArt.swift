@@ -9,8 +9,8 @@ import AppKit
 #endif
 
 // KemoSabe's cloud (the look behind `KemoSabeLook.cloud`) in its companion palette, ported from the old KemoSabe app: its `kemoPlate` shader
-// (legacy/ios/KemoSabe/KemoArtwork.metal) and the watch's CPU copy of it (`KemoTint`, in
-// legacy/ios/KemoSabeWatch/KemoTint.swift). The artwork is painted in Apricot (cream with coral); each
+// (the old KemoSabe app's KemoArtwork.metal) and the watch's CPU copy of it (`KemoTint`, in
+// the old KemoSabe Watch app's KemoTint.swift). The artwork is painted in Apricot (cream with coral); each
 // pixel keeps its light and shade and takes the palette's body color, or its accent where the paint is
 // saturated coral. Props (the computer and keyboard while it reads) keep their cream keys and dark
 // screen, and only their coral shell changes, as in the old app. Recolored pictures are cached per palette.

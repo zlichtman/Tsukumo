@@ -20,7 +20,7 @@ public enum KemoSabeLook: String, CaseIterable, Identifiable, Sendable {
     /// The palette KemoSabe starts in with this look: Apricot (cream and coral) or Classic (white and blue).
     public var defaultPalette: String { self == .finder ? "classic" : "apricot" }
     /// Its name in the character picker. The figure is named for what it is (the owner, October 8, 2026: "it's the
-    /// Finder icon"), the one exception to AGENTS.md rule 8.
+    /// Finder icon"), the one exception to AGENTS.md rule 7.
     public var title: String { self == .cloud ? "KemoSabe" : "Finder" }
 }
 

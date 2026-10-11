@@ -1,7 +1,7 @@
 @preconcurrency import AVFoundation
 import Foundation
 
-// Playing replies, ported from the old app's `SpeechPlayer` (`legacy/ios/KemoSabe/SpeechVoices.swift`): a
+// Playing replies, ported from the old app's `SpeechPlayer` (the old KemoSabe app's `SpeechVoices.swift`): a
 // sentence at a time, making the next while the current one plays, and if a neural voice fails partway, the
 // Apple voice says what wasn't spoken yet. New: a reply is spoken while it's still streaming in, sentence by
 // sentence (`ReplySpeech`), so the first words play before the bot has finished.

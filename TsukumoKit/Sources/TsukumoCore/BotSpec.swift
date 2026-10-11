@@ -19,6 +19,9 @@ public struct BotSpec: Codable, Identifiable, Hashable, Sendable {
     public var model: String?
     /// The reasoning effort; nil is the model's default. Sent only to a model that accepts it.
     public var effort: Effort?
+    /// Fast mode: the same model answering faster, at a higher price. Sent only where it's offered
+    /// (`EffortCatalog.offersFastMode`: Claude Opus 5.5, 5, and 4.8 on Anthropic's own API).
+    public var fast: Bool
     /// The bot's job, one line ("Codes in my projects").
     public var role: String
     /// What the owner told it to be and do, beyond its job; it goes to its engine with every turn. Empty for none.
@@ -40,11 +43,11 @@ public struct BotSpec: Codable, Identifiable, Hashable, Sendable {
     /// "lock conversation to model").
     public var conversation: String?
 
-    public init(id: UUID = UUID(), name: String, engine: EngineID, model: String? = nil, effort: Effort? = nil,
+    public init(id: UUID = UUID(), name: String, engine: EngineID, model: String? = nil, effort: Effort? = nil, fast: Bool = false,
                 role: String = "", instructions: String = "", origin: BotOrigin = .made, service: ServiceID? = nil,
                 look: BotLook = .kemoSabe, contextScope: ContextScope = ContextScope(), permissions: BotPermissions = BotPermissions(),
                 voice: String? = nil, conversation: String? = nil) {
-        self.id = id; self.name = name; self.engine = engine; self.model = model; self.effort = effort
+        self.id = id; self.name = name; self.engine = engine; self.model = model; self.effort = effort; self.fast = fast
         self.role = role; self.instructions = instructions; self.origin = origin; self.service = service
         self.look = look; self.contextScope = contextScope; self.permissions = permissions
         self.voice = voice; self.conversation = conversation
@@ -97,7 +100,7 @@ public struct BotSpec: Codable, Identifiable, Hashable, Sendable {
             if !copy.wearsCodexPets, !BotLook.isTsukumoCharacter(copy.look.pet) { copy.look.pet = nil; copy.look.petName = nil; copy.look.petImage = nil }
             if isBroughtIn {
                 copy.engine = .service((service ?? origin.service)?.rawValue ?? "agent")
-                copy.model = nil; copy.effort = nil; copy.contextScope.project = nil
+                copy.model = nil; copy.effort = nil; copy.fast = false; copy.contextScope.project = nil
             }
             return copy
         }
@@ -135,7 +138,7 @@ public struct BotSpec: Codable, Identifiable, Hashable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, engine, model, effort, role, instructions, origin, service, look, contextScope, permissions, voice, conversation
+        case id, name, engine, model, effort, fast, role, instructions, origin, service, look, contextScope, permissions, voice, conversation
     }
     /// Fields a newer build added are ignored (and an older build's personality); fields an older build left out
     /// take their defaults: a bot saved before October 8, 2026 was made here, and a service bot of the fixed lineup
@@ -147,6 +150,7 @@ public struct BotSpec: Codable, Identifiable, Hashable, Sendable {
         engine = try c.decode(EngineID.self, forKey: .engine)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         effort = try c.decodeIfPresent(Effort.self, forKey: .effort)
+        fast = (try? c.decodeIfPresent(Bool.self, forKey: .fast)) ?? false
         role = try c.decodeIfPresent(String.self, forKey: .role) ?? ""
         instructions = (try? c.decodeIfPresent(String.self, forKey: .instructions)) ?? ""
         origin = (try? c.decodeIfPresent(BotOrigin.self, forKey: .origin)) ?? .made
@@ -166,6 +170,7 @@ public struct BotSpec: Codable, Identifiable, Hashable, Sendable {
         try c.encode(engine, forKey: .engine)
         try c.encodeIfPresent(model, forKey: .model)
         try c.encodeIfPresent(effort, forKey: .effort)
+        if fast { try c.encode(fast, forKey: .fast) }
         try c.encode(role, forKey: .role)
         try c.encodeIfPresent(conversation, forKey: .conversation)
         if !instructions.isEmpty { try c.encode(instructions, forKey: .instructions) }
